@@ -33,6 +33,9 @@ build/
 
 # Node modules (will be installed in container)
 frontend/node_modules/
+frontend2/node_modules/
+frontend2/dist/
+backend/bin/
 node_modules/
 
 # Go build cache (will be built in container)
