@@ -4505,7 +4505,7 @@ const addGroupPricing = (entries: PricingFormEntry[]) =>
   entries.push(emptyGroupPricing());
 
 const groupPricingFromAPI = (
-  pricing: ChannelModelPricing[] | undefined,
+  pricing: ChannelModelPricing[] | null | undefined,
 ): PricingFormEntry[] =>
   (pricing || []).map((entry) => ({
     models: entry.models || [],

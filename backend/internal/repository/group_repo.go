@@ -595,6 +595,9 @@ func groupListOrder(params pagination.PaginationParams) []func(*entsql.Selector)
 	case "created_at":
 		field = group.FieldCreatedAt
 		defaultOrder = false
+	case "updated_at":
+		field = group.FieldUpdatedAt
+		defaultOrder = false
 	case "id":
 		field = group.FieldID
 		defaultOrder = false
