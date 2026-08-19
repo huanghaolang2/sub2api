@@ -99,5 +99,11 @@ esac
 [ "${#jwt_secret}" -ge 64 ] || fail "JWT_SECRET must be at least 64 characters"
 [ "${#totp_key}" -ge 64 ] || fail "TOTP_ENCRYPTION_KEY must be at least 64 characters"
 
-permission=$(stat -f '%Lp' "$base_file" 2>/dev/null || stat -c '%a' "$base_file" 2>/dev/null || true)
+if permission=$(stat -c '%a' "$base_file" 2>/dev/null); then
+    : # GNU stat (Linux)
+elif permission=$(stat -f '%Lp' "$base_file" 2>/dev/null); then
+    : # BSD stat (macOS)
+else
+    fail "cannot determine $base_file permissions"
+fi
 [ "$permission" = "600" ] || fail "$base_file permissions must be 600"
