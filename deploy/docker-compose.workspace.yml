@@ -1,0 +1,111 @@
+services:
+  sub2api:
+    image: "sub2api-backend:${SUB2API_WORKSPACE_IMAGE_TAG:?SUB2API_WORKSPACE_IMAGE_TAG is required}"
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}
+        VERSION: ${RELEASE_VERSION:-}
+        COMMIT: ${SOURCE_COMMIT:-local}
+    # docker-compose.standalone.yml only forwards its core variables. Loading
+    # this file also activates the logging/gateway/security settings maintained
+    # in deploy/.env. Explicit values from the base service still win.
+    env_file:
+      - .env
+    environment:
+      SERVER_MODE: ${SUB2API_WORKSPACE_SERVER_MODE:?SUB2API_WORKSPACE_SERVER_MODE is required}
+      LOG_ENV: ${SUB2API_WORKSPACE_LOG_ENV:?SUB2API_WORKSPACE_LOG_ENV is required}
+      LOG_FORMAT: ${SUB2API_WORKSPACE_LOG_FORMAT:?SUB2API_WORKSPACE_LOG_FORMAT is required}
+      LOG_CALLER: ${SUB2API_WORKSPACE_LOG_CALLER:?SUB2API_WORKSPACE_LOG_CALLER is required}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY is required}
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  frontend:
+    image: "sub2api-frontend:${SUB2API_WORKSPACE_IMAGE_TAG:?SUB2API_WORKSPACE_IMAGE_TAG is required}"
+    container_name: sub2api-frontend
+    restart: unless-stopped
+    init: true
+    read_only: ${SUB2API_WORKSPACE_FRONTEND_READ_ONLY:?SUB2API_WORKSPACE_FRONTEND_READ_ONLY is required}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.vite
+      target: ${SUB2API_WORKSPACE_MODE:?SUB2API_WORKSPACE_MODE is required}
+      args:
+        APP_DIR: frontend
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:alpine}
+    ports:
+      - "${SUB2API_WORKSPACE_BIND_HOST:?SUB2API_WORKSPACE_BIND_HOST is required}:${FRONTEND_PORT:-3001}:3000"
+    environment:
+      VITE_DEV_PORT: 3000
+      VITE_DEV_PROXY_TARGET: http://sub2api:8080
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    depends_on:
+      sub2api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend2:
+    image: "sub2api-frontend2:${SUB2API_WORKSPACE_IMAGE_TAG:?SUB2API_WORKSPACE_IMAGE_TAG is required}"
+    container_name: sub2api-frontend2
+    restart: unless-stopped
+    init: true
+    read_only: ${SUB2API_WORKSPACE_FRONTEND_READ_ONLY:?SUB2API_WORKSPACE_FRONTEND_READ_ONLY is required}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.vite
+      target: ${SUB2API_WORKSPACE_MODE:?SUB2API_WORKSPACE_MODE is required}
+      args:
+        APP_DIR: frontend2
+        NODE_IMAGE: ${NODE_IMAGE:-node:24-alpine}
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:alpine}
+    ports:
+      - "${SUB2API_WORKSPACE_BIND_HOST:?SUB2API_WORKSPACE_BIND_HOST is required}:${FRONTEND2_PORT:-3002}:3000"
+    environment:
+      VITE_DEV_PORT: 3000
+      VITE_DEV_PROXY_TARGET: http://sub2api:8080
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    depends_on:
+      sub2api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

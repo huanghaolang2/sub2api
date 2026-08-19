@@ -1,12 +1,18 @@
-.PHONY: build build-backend build-frontend build-frontend2 test test-backend test-frontend test-frontend-critical up restart stop-dev
+.PHONY: env-check config build build-backend build-frontend build-frontend2 test test-backend test-frontend test-frontend-critical up restart stop-dev
 
 PNPM_VERSION ?= 9.15.9
 PNPM := npx --yes pnpm@$(PNPM_VERSION)
+DEPLOY_ENV ?= dev
+VALID_DEPLOY_ENVS := dev prod
+ifeq ($(filter $(DEPLOY_ENV),$(VALID_DEPLOY_ENVS)),)
+$(error DEPLOY_ENV must be one of: $(VALID_DEPLOY_ENVS))
+endif
 COMPOSE_PROJECT_NAME ?= deploy
 COMPOSE_ENV_FILE := $(CURDIR)/deploy/.env
+COMPOSE_MODE_ENV_FILE := $(CURDIR)/deploy/.env.$(DEPLOY_ENV)
 COMPOSE_BASE_FILE := $(CURDIR)/deploy/docker-compose.standalone.yml
 COMPOSE_WORKSPACE_FILE := $(CURDIR)/deploy/docker-compose.workspace.yml
-COMPOSE := docker compose --project-name "$(COMPOSE_PROJECT_NAME)" --env-file "$(COMPOSE_ENV_FILE)" -f "$(COMPOSE_BASE_FILE)" -f "$(COMPOSE_WORKSPACE_FILE)"
+COMPOSE := docker compose --project-name "$(COMPOSE_PROJECT_NAME)" --env-file "$(COMPOSE_ENV_FILE)" --env-file "$(COMPOSE_MODE_ENV_FILE)" -f "$(COMPOSE_BASE_FILE)" -f "$(COMPOSE_WORKSPACE_FILE)"
 DOCKER_SERVICES := sub2api frontend frontend2
 
 FRONTEND_CRITICAL_VITEST := \
@@ -24,19 +30,28 @@ FRONTEND_CRITICAL_VITEST := \
 	src/features/channel-monitor-v2/__tests__/monitorFormat.spec.ts \
 	src/features/channel-monitor-v2/__tests__/monitorZoom.spec.ts
 
+# 校验共享配置和当前 dev/prod 预设；生产环境额外拒绝弱凭据和可变镜像标签。
+env-check:
+	@sh "$(CURDIR)/deploy/validate-workspace-env.sh" "$(DEPLOY_ENV)"
+
+# 解析并校验最终 Compose 配置，不输出容器环境变量或密钥。
+config: env-check
+	@$(COMPOSE) config --quiet
+	@echo "[ok] Docker Compose $(DEPLOY_ENV) 配置有效"
+
 # 一键编译后端和两个前端
 build: build-backend build-frontend build-frontend2
 
 # 构建后端 Docker 镜像。
-build-backend:
+build-backend: env-check
 	@$(COMPOSE) build sub2api
 
 # 构建原前端 Docker 镜像。
-build-frontend:
+build-frontend: env-check
 	@$(COMPOSE) build frontend
 
 # 构建新版前端 Docker 镜像。
-build-frontend2:
+build-frontend2: env-check
 	@$(COMPOSE) build frontend2
 
 # 运行测试（后端 + 前端）
@@ -54,7 +69,7 @@ test-frontend-critical:
 	@$(PNPM) --dir frontend exec vitest run $(FRONTEND_CRITICAL_VITEST)
 
 # 首次创建并启动三个 Docker 服务；不会构建镜像。
-up:
+up: env-check
 	@$(COMPOSE) up -d --no-build $(DOCKER_SERVICES)
 
 # 停止三个 Docker 服务，不删除容器和数据卷。
@@ -62,7 +77,9 @@ stop-dev:
 	@$(COMPOSE) stop $(DOCKER_SERVICES)
 
 # 停止正在运行的容器，跳过未运行的容器，然后启动全部 Docker 服务。
-restart:
+restart: env-check
+	@echo "[deploy] 当前环境: $(DEPLOY_ENV)"
+	@echo "[deploy] 配置文件: deploy/.env + deploy/.env.$(DEPLOY_ENV)"
 	@set -eu; \
 	running="$$( $(COMPOSE) ps --status running --services )"; \
 	stop_targets=""; \
@@ -77,7 +94,7 @@ restart:
 		$(COMPOSE) stop $$stop_targets; \
 	fi; \
 	$(COMPOSE) up -d --no-build $(DOCKER_SERVICES); \
-	echo "[ok] Docker 服务已全部启动"; \
+	echo "[ok] Docker 服务已按 $(DEPLOY_ENV) 环境全部启动"; \
 	echo "[访问地址]"; \
 	started="$$( $(COMPOSE) ps --status running --services )"; \
 	for service in $(DOCKER_SERVICES); do \

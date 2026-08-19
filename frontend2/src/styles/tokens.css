@@ -1,0 +1,40 @@
+:root {
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-caption: 11px;
+  --font-meta: 12px;
+  --font-body-sm: 13px;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --surface-canvas: #f5f3ef;
+  --surface-raised: #ffffff;
+  --text-primary: #17151d;
+  --text-secondary: #67636f;
+  --text-tertiary: #817c88;
+  --border-subtle: #dcd8d2;
+  --border-strong: #b9b3aa;
+  --accent: #5c4ae5;
+  --accent-soft: rgba(92, 74, 229, .13);
+  --focus: #6c5ce7;
+  --danger: #c43b4d;
+  --success: #19724a;
+  --warning: #9a5c00;
+  --warning-soft: #fff1cf;
+  --warning-text: #754400;
+}
+
+:root[data-theme='dark'] {
+  --surface-canvas: #0d0d12;
+  --surface-raised: #17171e;
+  --text-primary: #f6f3ef;
+  --text-secondary: #aaa6b2;
+  --text-tertiary: #88838f;
+  --border-subtle: #2d2c35;
+  --border-strong: #514e5b;
+  --accent: #8d7cff;
+  --accent-soft: rgba(108, 92, 231, .18);
+  --focus: #a99cff;
+  --danger: #ff7185;
+  --success: #66d69b;
+  --warning: #f2b84b;
+  --warning-soft: rgba(242, 184, 75, .14);
+  --warning-text: #ffd485;
+}
