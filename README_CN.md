@@ -741,6 +741,25 @@ go generate ./cmd/server
 
 ---
 
+## AI API 版本兼容
+
+核心 AI 端点同时支持推荐的 `/api/v1/...` 和旧版兼容路径 `/api/...`。两者都会在服务内部进入现有 `/v1/...` 路由，不产生 HTTP 重定向，鉴权、限流、计费、审计、流式响应和错误处理只执行一次。原有 `/v1/messages` 等协议路径继续可用。
+
+| 能力 | 推荐路径 | 旧版兼容路径 | 现有路由 |
+|------|----------|--------------|----------|
+| Messages | `POST /api/v1/messages` | `POST /api/messages` | `POST /v1/messages` |
+| Token 计数 | `POST /api/v1/messages/count_tokens` | `POST /api/messages/count_tokens` | `POST /v1/messages/count_tokens` |
+| Responses | `/api/v1/responses` | `/api/responses` | `/v1/responses` |
+| Chat Completions | `POST /api/v1/chat/completions` | `POST /api/chat/completions` | `POST /v1/chat/completions` |
+| Models | `GET /api/v1/models` | `GET /api/models` | `GET /v1/models` |
+| Embeddings | `POST /api/v1/embeddings` | `POST /api/embeddings` | `POST /v1/embeddings` |
+| 图片 | `/api/v1/images/...` | `/api/images/...` | `/v1/images/...` |
+| 视频 | `/api/v1/videos/...` | `/api/videos/...` | `/v1/videos/...` |
+
+兼容层使用“HTTP 方法 + 路径模板”精确白名单，不改写管理端接口，也不覆盖 Gemini、Antigravity、Codex 专用入口、语音、搜索、`live` 和计费路由。未列入白名单的 `/api`、`/api/v1` 请求仍按现有路由原样处理。
+
+---
+
 ## Antigravity 使用说明
 
 Sub2API 支持 [Antigravity](https://antigravity.so/) 账户，授权后可通过专用端点访问 Claude 和 Gemini 模型。

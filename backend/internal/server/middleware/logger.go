@@ -6,6 +6,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/server/apicompat"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
@@ -16,8 +17,8 @@ func Logger() gin.HandlerFunc {
 		// 开始时间
 		startTime := time.Now()
 
-		// 请求路径
-		path := c.Request.URL.Path
+		// 请求路径。兼容别名保留客户端原始路径，并单独记录内部规范路径。
+		path, canonicalPath := apicompat.RequestPaths(c.Request.Context(), c.Request.URL.Path)
 
 		// 处理请求
 		c.Next()
@@ -61,6 +62,9 @@ func Logger() gin.HandlerFunc {
 			zap.String("protocol", protocol),
 			zap.String("method", method),
 			zap.String("path", path),
+		}
+		if canonicalPath != "" {
+			fields = append(fields, zap.String("canonical_path", canonicalPath))
 		}
 		if rejected {
 			fields = append(fields,

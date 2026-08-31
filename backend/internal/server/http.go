@@ -11,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/websearch"
+	"github.com/Wei-Shaw/sub2api/internal/server/apicompat"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -111,7 +112,7 @@ func configureTrustedProxies(r *gin.Engine, cfg config.ServerConfig) {
 
 // ProvideHTTPServer 提供 HTTP 服务器
 func ProvideHTTPServer(cfg *config.Config, router *gin.Engine) *http.Server {
-	httpHandler := http.Handler(router)
+	httpHandler := apicompat.Handler(router)
 	server := &http.Server{
 		Addr:           cfg.Server.Address(),
 		Handler:        httpHandler,

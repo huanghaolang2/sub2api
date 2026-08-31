@@ -10,6 +10,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/server/apicompat"
 	"github.com/gin-gonic/gin"
 )
 
@@ -198,6 +199,39 @@ func TestLogger_AccessLogIncludesCoreFields(t *testing.T) {
 	if !found {
 		t.Fatalf("access log event not found")
 	}
+}
+
+func TestLogger_AccessLogPreservesAliasAndCanonicalPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	sink := initMiddlewareTestLogger(t)
+
+	r := gin.New()
+	r.Use(RequestLogger())
+	r.Use(Logger())
+	r.GET("/v1/models", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/models", nil)
+	apicompat.Handler(r).ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d", w.Code)
+	}
+
+	for _, event := range sink.list() {
+		if event == nil || event.Message != "http request completed" {
+			continue
+		}
+		if got := event.Fields["path"]; got != "/api/v1/models" {
+			t.Fatalf("path=%q, want client alias", got)
+		}
+		if got := event.Fields["canonical_path"]; got != "/v1/models" {
+			t.Fatalf("canonical_path=%q, want internal route", got)
+		}
+		return
+	}
+	t.Fatalf("access log event not found")
 }
 
 func TestLogger_IngressRejectRemainsInStandardAccessLog(t *testing.T) {

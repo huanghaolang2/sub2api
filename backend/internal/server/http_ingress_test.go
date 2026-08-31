@@ -55,6 +55,31 @@ func TestProvideHTTPServerEnablesBoundedH2C(t *testing.T) {
 	require.True(t, srv.Protocols.HTTP1())
 }
 
+func TestProvideHTTPServerAppliesAIEndpointCompatAliases(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	router.GET("/v1/images/tasks/:task_id", func(c *gin.Context) {
+		c.String(http.StatusOK, c.Param("task_id"))
+	})
+	router.GET("/api/v1/admin/users", func(c *gin.Context) {
+		c.String(http.StatusOK, "panel")
+	})
+
+	srv := ProvideHTTPServer(ingressTestConfig(), router)
+
+	aliasRecorder := httptest.NewRecorder()
+	aliasRequest := httptest.NewRequest(http.MethodGet, "/api/v1/images/tasks/task-123", nil)
+	srv.Handler.ServeHTTP(aliasRecorder, aliasRequest)
+	require.Equal(t, http.StatusOK, aliasRecorder.Code)
+	require.Equal(t, "task-123", aliasRecorder.Body.String())
+
+	panelRecorder := httptest.NewRecorder()
+	panelRequest := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users", nil)
+	srv.Handler.ServeHTTP(panelRecorder, panelRequest)
+	require.Equal(t, http.StatusOK, panelRecorder.Code)
+	require.Equal(t, "panel", panelRecorder.Body.String())
+}
+
 func TestConfigureTrustedProxies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tests := []struct {

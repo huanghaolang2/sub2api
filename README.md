@@ -716,6 +716,25 @@ Simple Mode is designed for individual developers or internal teams who want qui
 
 ---
 
+## AI API Version Compatibility
+
+Core AI endpoints accept the preferred `/api/v1/...` form and the legacy `/api/...` form. Both are handled internally by the existing `/v1/...` route, so authentication, rate limiting, billing, auditing, streaming, and error handling run once without an HTTP redirect. Existing native paths such as `/v1/messages` remain available.
+
+| Capability | Preferred | Legacy alias | Existing route |
+|------------|-----------|--------------|----------------|
+| Messages | `POST /api/v1/messages` | `POST /api/messages` | `POST /v1/messages` |
+| Token counting | `POST /api/v1/messages/count_tokens` | `POST /api/messages/count_tokens` | `POST /v1/messages/count_tokens` |
+| Responses | `/api/v1/responses` | `/api/responses` | `/v1/responses` |
+| Chat Completions | `POST /api/v1/chat/completions` | `POST /api/chat/completions` | `POST /v1/chat/completions` |
+| Models | `GET /api/v1/models` | `GET /api/models` | `GET /v1/models` |
+| Embeddings | `POST /api/v1/embeddings` | `POST /api/embeddings` | `POST /v1/embeddings` |
+| Images | `/api/v1/images/...` | `/api/images/...` | `/v1/images/...` |
+| Videos | `/api/v1/videos/...` | `/api/videos/...` | `/v1/videos/...` |
+
+Compatibility uses an exact HTTP-method and path-template allowlist. It does not rewrite panel APIs or special Gemini, Antigravity, Codex-direct, voice, search, live, and billing routes. Unlisted `/api` and `/api/v1` paths continue through normal routing unchanged.
+
+---
+
 ## Asynchronous Image Tasks
 
 Long-running OpenAI/Grok image generation and editing can be submitted through `/v1/images/generations/async` or `/v1/images/edits/async`, then polled at `/v1/images/tasks/{task_id}` without holding a CDN connection open. See [Asynchronous Image Tasks](docs/ASYNC_IMAGE_TASKS.md) for request and response examples.

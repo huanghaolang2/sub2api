@@ -6,6 +6,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/server/apicompat"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -31,13 +32,18 @@ func RequestLogger() gin.HandlerFunc {
 		clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string)
 		clientRequestID, _ = normalizeCorrelationID(clientRequestID)
 
-		requestLogger := logger.With(
+		requestPath, canonicalPath := apicompat.RequestPaths(c.Request.Context(), c.Request.URL.Path)
+		fields := []zap.Field{
 			zap.String("component", "http"),
 			zap.String("request_id", requestID),
 			zap.String("client_request_id", strings.TrimSpace(clientRequestID)),
-			zap.String("path", c.Request.URL.Path),
+			zap.String("path", requestPath),
 			zap.String("method", c.Request.Method),
-		)
+		}
+		if canonicalPath != "" {
+			fields = append(fields, zap.String("canonical_path", canonicalPath))
+		}
+		requestLogger := logger.With(fields...)
 
 		ctx = logger.IntoContext(ctx, requestLogger)
 		c.Request = c.Request.WithContext(ctx)
