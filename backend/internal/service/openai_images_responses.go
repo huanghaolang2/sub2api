@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -321,11 +322,83 @@ func openAIImageUploadToDataURL(upload OpenAIImagesUpload) (string, error) {
 	if len(upload.Data) == 0 {
 		return "", fmt.Errorf("upload %q is empty", strings.TrimSpace(upload.FileName))
 	}
-	contentType := strings.TrimSpace(upload.ContentType)
-	if contentType == "" {
-		contentType = http.DetectContentType(upload.Data)
+	contentType, err := normalizeOpenAIImageContentType(upload.ContentType, upload.Data)
+	if err != nil {
+		return "", fmt.Errorf("upload %q: %w", strings.TrimSpace(upload.FileName), err)
 	}
 	return "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(upload.Data), nil
+}
+
+// normalizeOpenAIImageContentType prevents generic multipart defaults such as
+// application/octet-stream from becoming an invalid Responses image data URL.
+// The declared type wins when it is an image; otherwise the bytes are inspected
+// so clients that omit or mislabel the multipart Content-Type still work.
+func normalizeOpenAIImageContentType(contentType string, data []byte) (string, error) {
+	declared := strings.TrimSpace(contentType)
+	if declared != "" {
+		if parsed, _, err := mime.ParseMediaType(declared); err == nil {
+			declared = parsed
+		} else if semicolon := strings.IndexByte(declared, ';'); semicolon >= 0 {
+			declared = strings.TrimSpace(declared[:semicolon])
+		}
+	}
+	declared = strings.ToLower(strings.TrimSpace(declared))
+	if strings.HasPrefix(declared, "image/") {
+		return declared, nil
+	}
+
+	detected := strings.ToLower(strings.TrimSpace(strings.Split(http.DetectContentType(data), ";")[0]))
+	if strings.HasPrefix(detected, "image/") {
+		return detected, nil
+	}
+	if declared == "" {
+		return "", fmt.Errorf("could not determine an image MIME type")
+	}
+	return "", fmt.Errorf("unsupported image MIME type %q", declared)
+}
+
+// normalizeOpenAIImageInputURL rewrites only data URLs whose MIME header is
+// missing or generic. Remote URLs are left untouched because the upstream
+// service, rather than the gateway, owns their download semantics.
+func normalizeOpenAIImageInputURL(rawURL string) (string, error) {
+	trimmed := strings.TrimSpace(rawURL)
+	if !strings.HasPrefix(strings.ToLower(trimmed), "data:") {
+		return trimmed, nil
+	}
+	header, payload, ok := strings.Cut(trimmed[len("data:"):], ",")
+	if !ok {
+		return "", fmt.Errorf("image data URL is missing a comma separator")
+	}
+	parts := strings.Split(header, ";")
+	if len(parts) < 2 {
+		return trimmed, nil
+	}
+	hasBase64 := false
+	for _, part := range parts[1:] {
+		if strings.EqualFold(strings.TrimSpace(part), "base64") {
+			hasBase64 = true
+			break
+		}
+	}
+	if !hasBase64 {
+		return trimmed, nil
+	}
+	mediaType := strings.TrimSpace(parts[0])
+	if parsed, _, err := mime.ParseMediaType(mediaType); err == nil {
+		mediaType = parsed
+	}
+	if strings.HasPrefix(strings.ToLower(mediaType), "image/") {
+		return trimmed, nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(payload))
+	if err != nil {
+		return "", fmt.Errorf("decode image data URL: %w", err)
+	}
+	normalizedType, err := normalizeOpenAIImageContentType(mediaType, decoded)
+	if err != nil {
+		return "", fmt.Errorf("image data URL: %w", err)
+	}
+	return "data:" + normalizedType + ";base64," + base64.StdEncoding.EncodeToString(decoded), nil
 }
 
 func buildOpenAIImagesResponsesRequest(parsed *OpenAIImagesRequest, toolModel string) ([]byte, error) {
@@ -340,7 +413,11 @@ func buildOpenAIImagesResponsesRequest(parsed *OpenAIImagesRequest, toolModel st
 	inputImages := make([]string, 0, len(parsed.InputImageURLs)+len(parsed.Uploads))
 	for _, imageURL := range parsed.InputImageURLs {
 		if trimmed := strings.TrimSpace(imageURL); trimmed != "" {
-			inputImages = append(inputImages, trimmed)
+			normalized, err := normalizeOpenAIImageInputURL(trimmed)
+			if err != nil {
+				return nil, err
+			}
+			inputImages = append(inputImages, normalized)
 		}
 	}
 	for _, upload := range parsed.Uploads {
@@ -400,6 +477,13 @@ func buildOpenAIImagesResponsesRequest(parsed *OpenAIImagesRequest, toolModel st
 	}
 
 	maskImageURL := strings.TrimSpace(parsed.MaskImageURL)
+	if maskImageURL != "" {
+		var err error
+		maskImageURL, err = normalizeOpenAIImageInputURL(maskImageURL)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if parsed.MaskUpload != nil {
 		dataURL, err := openAIImageUploadToDataURL(*parsed.MaskUpload)
 		if err != nil {

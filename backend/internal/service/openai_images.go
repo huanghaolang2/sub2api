@@ -143,11 +143,8 @@ func (u OpenAIImagesUpload) ModerationDataURL() string {
 	if len(u.Data) == 0 {
 		return ""
 	}
-	contentType := strings.TrimSpace(u.ContentType)
-	if contentType == "" {
-		contentType = http.DetectContentType(u.Data)
-	}
-	if !strings.HasPrefix(strings.ToLower(contentType), "image/") {
+	contentType, err := normalizeOpenAIImageContentType(u.ContentType, u.Data)
+	if err != nil {
 		return ""
 	}
 	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(u.Data))

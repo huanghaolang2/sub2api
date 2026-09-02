@@ -525,6 +525,8 @@ server:
   host: "0.0.0.0"
   port: 8080
   mode: "release"
+  # Use "disabled" for an API-only origin; "embedded" is the default.
+  frontend_mode: "embedded"
 
 database:
   host: "localhost"

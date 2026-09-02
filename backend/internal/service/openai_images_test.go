@@ -1849,6 +1849,36 @@ func TestBuildOpenAIImagesResponsesRequest_StripsInputFidelity(t *testing.T) {
 	require.Equal(t, "edit", gjson.GetBytes(body, "tools.0.action").String())
 }
 
+func TestBuildOpenAIImagesResponsesRequest_InfersImageMIMEForOctetStreamUpload(t *testing.T) {
+	parsed := &OpenAIImagesRequest{
+		Endpoint: openAIImagesEditsEndpoint,
+		Model:    "gpt-image-2",
+		Prompt:   "replace background",
+		Uploads: []OpenAIImagesUpload{{
+			FileName:    "source.png",
+			ContentType: "application/octet-stream",
+			Data:        []byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'},
+		}},
+	}
+
+	body, err := buildOpenAIImagesResponsesRequest(parsed, "gpt-image-2")
+	require.NoError(t, err)
+	require.Equal(t, "data:image/png;base64,iVBORw0KGgo=", gjson.GetBytes(body, "input.0.content.1.image_url").String())
+}
+
+func TestBuildOpenAIImagesResponsesRequest_NormalizesOctetStreamDataURL(t *testing.T) {
+	parsed := &OpenAIImagesRequest{
+		Endpoint:       openAIImagesEditsEndpoint,
+		Model:          "gpt-image-2",
+		Prompt:         "replace background",
+		InputImageURLs: []string{"data:application/octet-stream;base64,iVBORw0KGgo="},
+	}
+
+	body, err := buildOpenAIImagesResponsesRequest(parsed, "gpt-image-2")
+	require.NoError(t, err)
+	require.Equal(t, "data:image/png;base64,iVBORw0KGgo=", gjson.GetBytes(body, "input.0.content.1.image_url").String())
+}
+
 func TestCollectOpenAIImagesFromResponsesBody_FallsBackToOutputItemDone(t *testing.T) {
 	body := []byte(
 		"data: {\"type\":\"response.created\",\"response\":{\"created_at\":1710000004}}\n\n" +

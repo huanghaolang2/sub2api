@@ -23,6 +23,16 @@ const (
 	RunModeSimple   = "simple"
 )
 
+// FrontendMode controls whether the embedded frontend is served by the
+// backend HTTP server. The frontend remains embedded in the binary when the
+// mode is disabled, but no frontend middleware is registered.
+type FrontendMode string
+
+const (
+	FrontendModeEmbedded FrontendMode = "embedded"
+	FrontendModeDisabled FrontendMode = "disabled"
+)
+
 // 使用量记录队列溢出策略
 const (
 	UsageRecordOverflowPolicyDrop   = "drop"
@@ -658,18 +668,19 @@ type PricingConfig struct {
 }
 
 type ServerConfig struct {
-	Host                     string    `mapstructure:"host"`
-	Port                     int       `mapstructure:"port"`
-	Mode                     string    `mapstructure:"mode"`                  // debug/release
-	EnableServerTiming       bool      `mapstructure:"enable_server_timing"`  // Admin UI Server-Timing response header
-	FrontendURL              string    `mapstructure:"frontend_url"`          // 前端基础 URL，用于生成邮件中的外部链接
-	ReadHeaderTimeout        int       `mapstructure:"read_header_timeout"`   // 读取请求头超时（秒）
-	MaxHeaderBytes           int       `mapstructure:"max_header_bytes"`      // 请求头最大字节数（HTTP/2 映射为 header-list 上限）
-	IdleTimeout              int       `mapstructure:"idle_timeout"`          // 空闲连接超时（秒）
-	TrustedProxies           []string  `mapstructure:"trusted_proxies"`       // 可信代理列表（CIDR/IP）
-	TrustedProxiesConfigured bool      `mapstructure:"-" json:"-" yaml:"-"`   // 是否显式配置了可信代理列表
-	MaxRequestBodySize       int64     `mapstructure:"max_request_body_size"` // 全局最大请求体限制
-	H2C                      H2CConfig `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
+	Host                     string       `mapstructure:"host"`
+	Port                     int          `mapstructure:"port"`
+	Mode                     string       `mapstructure:"mode"`                  // debug/release
+	FrontendMode             FrontendMode `mapstructure:"frontend_mode"`         // embedded/disabled
+	EnableServerTiming       bool         `mapstructure:"enable_server_timing"`  // Admin UI Server-Timing response header
+	FrontendURL              string       `mapstructure:"frontend_url"`          // 前端基础 URL，用于生成邮件中的外部链接
+	ReadHeaderTimeout        int          `mapstructure:"read_header_timeout"`   // 读取请求头超时（秒）
+	MaxHeaderBytes           int          `mapstructure:"max_header_bytes"`      // 请求头最大字节数（HTTP/2 映射为 header-list 上限）
+	IdleTimeout              int          `mapstructure:"idle_timeout"`          // 空闲连接超时（秒）
+	TrustedProxies           []string     `mapstructure:"trusted_proxies"`       // 可信代理列表（CIDR/IP）
+	TrustedProxiesConfigured bool         `mapstructure:"-" json:"-" yaml:"-"`   // 是否显式配置了可信代理列表
+	MaxRequestBodySize       int64        `mapstructure:"max_request_body_size"` // 全局最大请求体限制
+	H2C                      H2CConfig    `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
 }
 
 // H2CConfig HTTP/2 Cleartext 配置
@@ -1770,6 +1781,10 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "debug"
 	}
+	cfg.Server.FrontendMode = FrontendMode(strings.ToLower(strings.TrimSpace(string(cfg.Server.FrontendMode))))
+	if cfg.Server.FrontendMode == "" {
+		cfg.Server.FrontendMode = FrontendModeEmbedded
+	}
 	cfg.Server.FrontendURL = strings.TrimSpace(cfg.Server.FrontendURL)
 	cfg.JWT.Secret = strings.TrimSpace(cfg.JWT.Secret)
 	cfg.LinuxDo.ClientID = strings.TrimSpace(cfg.LinuxDo.ClientID)
@@ -1923,6 +1938,7 @@ func setDefaults() {
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.mode", "release")
+	viper.SetDefault("server.frontend_mode", string(FrontendModeEmbedded))
 	viper.SetDefault("server.enable_server_timing", false)
 	viper.SetDefault("server.frontend_url", "")
 	viper.SetDefault("server.read_header_timeout", 10) // 10秒读取请求头
@@ -2577,6 +2593,11 @@ func (c *Config) Validate() error {
 	}
 	if c.Server.IdleTimeout <= 0 {
 		return fmt.Errorf("server.idle_timeout must be positive")
+	}
+	switch c.Server.FrontendMode {
+	case FrontendModeEmbedded, FrontendModeDisabled:
+	default:
+		return fmt.Errorf("server.frontend_mode must be one of: embedded/disabled")
 	}
 	if c.Server.MaxRequestBodySize < 0 {
 		return fmt.Errorf("server.max_request_body_size must be non-negative")

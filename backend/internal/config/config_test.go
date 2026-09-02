@@ -72,6 +72,32 @@ func TestLoadServerTimingConfig(t *testing.T) {
 	})
 }
 
+func TestLoadFrontendModeConfig(t *testing.T) {
+	t.Run("embedded by default", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		cfg, err := Load()
+		require.NoError(t, err)
+		require.Equal(t, FrontendModeEmbedded, cfg.Server.FrontendMode)
+	})
+
+	t.Run("disabled by environment variable", func(t *testing.T) {
+		resetViperWithJWTSecret(t)
+		t.Setenv("SERVER_FRONTEND_MODE", string(FrontendModeDisabled))
+		cfg, err := Load()
+		require.NoError(t, err)
+		require.Equal(t, FrontendModeDisabled, cfg.Server.FrontendMode)
+	})
+}
+
+func TestValidateFrontendMode(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	require.NoError(t, err)
+
+	cfg.Server.FrontendMode = FrontendMode("invalid")
+	require.ErrorContains(t, cfg.Validate(), "server.frontend_mode must be one of: embedded/disabled")
+}
+
 func TestLoadRedisUsernameFromEnvironment(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("REDIS_USERNAME", "app-user")

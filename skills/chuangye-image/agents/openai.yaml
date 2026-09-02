@@ -1,0 +1,7 @@
+interface:
+  display_name: "创意到生图片生成"
+  short_description: "通过创意到生平台 API 生成和编辑高质量图片文件"
+  default_prompt: "使用 $chuangye-image 根据我的提示词生成或编辑图片。"
+
+policy:
+  allow_implicit_invocation: true

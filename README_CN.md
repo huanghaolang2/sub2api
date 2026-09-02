@@ -539,6 +539,8 @@ server:
   host: "0.0.0.0"
   port: 8080
   mode: "release"
+  # API 专用域名可关闭后端内嵌网页：embedded（默认）或 disabled
+  frontend_mode: "embedded"
 
 database:
   host: "localhost"
