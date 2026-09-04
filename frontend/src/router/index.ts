@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { isUserFeatureRouteAvailable } from '@/utils/userFeatureVisibility'
 
 /**
  * Route definitions with lazy loading
@@ -891,6 +892,12 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
+  // Frontend-only optional user feature switch. Admin management routes are
+  // intentionally outside these user route prefixes and remain available.
+  if (!isUserFeatureRouteAvailable(to.path)) {
+    next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
+    return
+  }
 
   // 公共设置可能尚未加载（App.vue 的 onMounted 异步拉取晚于首次导航，且纯静态部署
   // 无 __APP_CONFIG__ 注入）。此时 cachedPublicSettings 为空会把 payment/risk_control
