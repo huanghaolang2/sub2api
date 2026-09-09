@@ -16,6 +16,7 @@ COMPOSE := docker compose --project-name "$(COMPOSE_PROJECT_NAME)" --env-file "$
 DOCKER_SERVICES := sub2api frontend frontend2
 
 FRONTEND_CRITICAL_VITEST := \
+	src/i18n/__tests__/localeKeyCompleteness.spec.ts \
 	src/api/__tests__/client.spec.ts \
 	src/api/__tests__/tokenRefresh.spec.ts \
 	src/api/__tests__/channelMonitorV2.spec.ts \
