@@ -351,7 +351,7 @@ func validateGroupPlatform(platform string) error {
 		service.PlatformKimi,
 		service.PlatformZhipu,
 		service.PlatformDeepseek,
-		service.PlatformMinimax,
+		service.PlatformMiniMax,
 		service.PlatformComposite:
 		return nil
 	default:
