@@ -13,7 +13,8 @@ const platformTypes: Record<AccountPlatform, AccountType[]> = {
   [AccountPlatformOption.GROK]: [AccountTypeOption.OAUTH, AccountTypeOption.API_KEY],
   [AccountPlatformOption.KIMI]: [AccountTypeOption.API_KEY],
   [AccountPlatformOption.ZHIPU]: [AccountTypeOption.API_KEY],
-  [AccountPlatformOption.DEEPSEEK]: [AccountTypeOption.API_KEY]
+  [AccountPlatformOption.DEEPSEEK]: [AccountTypeOption.API_KEY],
+  minimax: [AccountTypeOption.API_KEY]
 }
 const typeOptions = computed(() => platformTypes[form.platform].map(value => ({ value, label: typeLabels[value] })))
 function toggleGroup(id: number): void { form.group_ids = form.group_ids.includes(id) ? form.group_ids.filter(item => item !== id) : [...form.group_ids, id] }

@@ -74,7 +74,7 @@ export interface ModelPlazaGroup {
   image_rate_independent: boolean
   image_rate_multiplier: number
   /** 分组是否启用长上下文阶梯计费；false 时实付列只展示最低档，官方阶梯仅供参考。 */
-  long_context_pricing_enabled: boolean
+  long_context_pricing_enabled?: boolean
   models: PlazaModel[]
 }
 

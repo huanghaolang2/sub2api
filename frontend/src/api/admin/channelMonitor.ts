@@ -96,9 +96,9 @@ export interface ChannelMonitor {
   body_override_mode: BodyOverrideMode
   body_override: Record<string, unknown> | null
   /** 检测模式：probe（默认）/ quota / quota_probe */
-  check_mode: CheckMode
+  check_mode?: CheckMode
   /** 配额模式关联的账号 ID；探活模式为 null */
-  account_id: number | null
+  account_id?: number | null
   /** 主模型最近一次配额快照（配额模式；无历史时为 null） */
   latest_quota?: MonitorQuotaSnapshot | null
 }

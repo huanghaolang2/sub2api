@@ -16,6 +16,10 @@ import type {
   PaginatedResponse
 } from '@/types'
 
+export const getModelsListCandidates = async (groupId: number, platform?: GroupPlatform): Promise<string[]> => {
+  return getModelAllowlistCandidates(groupId, platform)
+}
+
 export interface LiveCapability {
   supported: boolean
   reason?: string

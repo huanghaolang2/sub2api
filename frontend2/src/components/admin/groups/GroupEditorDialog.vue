@@ -50,7 +50,7 @@ async function loadModelsListCandidates(): Promise<void> {
   modelsListLoading.value = true
   modelsListError.value = ''
   try {
-    const models = await groupsAPI.getModelsListCandidates(props.group?.id || 0, form.platform)
+    const models = await groupsAPI.getModelAllowlistCandidates(props.group?.id || 0, form.platform)
     if (request === modelsListRequest) modelsListCandidates.value = models
   } catch (caught) {
     if (request === modelsListRequest) {

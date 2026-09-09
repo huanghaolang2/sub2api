@@ -618,6 +618,7 @@ export interface Group {
 }
 
 export interface AdminGroup extends Group {
+  models_list_config?: { enabled: boolean; models: string[] } | null
   force_openai_fast: boolean
   free_openai_fast: boolean
   model_pricing: import('@/api/admin/channels').ChannelModelPricing[] | null
@@ -795,6 +796,7 @@ export interface CreateGroupRequest {
   force_openai_fast?: boolean
   free_openai_fast?: boolean
   model_pricing?: import('@/api/admin/channels').ChannelModelPricing[]
+  models_list_config?: { enabled: boolean; models: string[] } | null
   allow_image_generation?: boolean
   allow_batch_image_generation?: boolean
   image_rate_independent?: boolean
@@ -861,6 +863,7 @@ export interface UpdateGroupRequest {
   force_openai_fast?: boolean
   free_openai_fast?: boolean
   model_pricing?: import('@/api/admin/channels').ChannelModelPricing[]
+  models_list_config?: { enabled: boolean; models: string[] } | null
   allow_image_generation?: boolean
   allow_batch_image_generation?: boolean
   image_rate_independent?: boolean
@@ -1718,7 +1721,7 @@ export interface UsageLog {
   request_type?: UsageRequestType
   stream: boolean
   openai_ws_mode?: boolean
-  native_compaction_v2: boolean
+  native_compaction_v2?: boolean
   duration_ms: number | null
   first_token_ms: number | null
 

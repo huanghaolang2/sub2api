@@ -20,7 +20,8 @@ import { useAppStore } from '@/stores/app'
 
 enum AccountColumn { CAPACITY = 'capacity', TODAY = 'today', GROUPS = 'groups', USAGE = 'usage', UPSTREAM_RATE = 'upstream_rate', PROXY = 'proxy', NOTES = 'notes', PRIORITY = 'priority', SCHEDULER = 'scheduler', RATE = 'rate', LAST_USED = 'last_used', EXPIRES = 'expires' }
 const columnLabels: Record<AccountColumn, string> = { [AccountColumn.CAPACITY]: '容量', [AccountColumn.TODAY]: '今日用量', [AccountColumn.GROUPS]: '绑定分组', [AccountColumn.USAGE]: '窗口用量', [AccountColumn.UPSTREAM_RATE]: '上游倍率', [AccountColumn.PROXY]: '代理', [AccountColumn.NOTES]: '备注', [AccountColumn.PRIORITY]: '优先级', [AccountColumn.SCHEDULER]: '调度分', [AccountColumn.RATE]: '计费倍率', [AccountColumn.LAST_USED]: '最近使用', [AccountColumn.EXPIRES]: '到期时间' }
-const platformLabels: Record<AccountPlatform, string> = { openai: 'OpenAI / Codex', anthropic: 'Anthropic / Claude', gemini: 'Google Gemini', antigravity: 'Antigravity', grok: 'Grok', kimi: 'Kimi', zhipu: '智谱', deepseek: 'DeepSeek' }
+const platformLabels: Record<AccountPlatform, string> = { openai: 'OpenAI / Codex', anthropic: 'Anthropic / Claude', gemini: 'Google Gemini', antigravity: 'Antigravity', grok: 'Grok', kimi: 'Kimi', zhipu: '智谱', minimax: 'MiniMax',
+    deepseek: 'DeepSeek' }
 const typeLabels: Record<AccountType, string> = { oauth: 'OAuth', 'setup-token': 'Setup Token', apikey: 'API Key', upstream: '上游账号', bedrock: 'Amazon Bedrock', service_account: 'Service Account' }
 const statusLabels: Record<ResourceStatus, string> = { [ResourceStatus.ACTIVE]: '启用', [ResourceStatus.INACTIVE]: '停用', [ResourceStatus.ERROR]: '异常', [ResourceStatus.EXPIRED]: '已过期', [ResourceStatus.DISABLED]: '已禁用' }
 const COLUMN_KEY = 'frontend2:admin-accounts:columns'; const FILTER_KEY = 'frontend2:admin-accounts:filters'; const PAGE_SIZES = [20, 50, 100]

@@ -55,7 +55,7 @@ export interface ChannelModelPricing {
   image_output_price: number | null
   per_request_price: number | null
   intervals: PricingInterval[]
-  time_pricing: ChannelTimePricing | null
+  time_pricing?: ChannelTimePricing | null
 }
 
 export interface AccountStatsPricingRule {

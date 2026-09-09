@@ -186,6 +186,10 @@ function intervalToApi(value: PricingIntervalDraft, index: number): PricingInter
     output_price: nonNegativeMillionToPerToken(value.output_price, `第 ${index + 1} 个区间的输出价格`),
     cache_write_price: nonNegativeMillionToPerToken(value.cache_write_price, `第 ${index + 1} 个区间的缓存写入价格`),
     cache_read_price: nonNegativeMillionToPerToken(value.cache_read_price, `第 ${index + 1} 个区间的缓存读取价格`),
+    input_multiplier: null,
+    output_multiplier: null,
+    cache_write_multiplier: null,
+    cache_read_multiplier: null,
     per_request_price: parseNonNegative(value.per_request_price, `第 ${index + 1} 个区间的按次价格`),
     sort_order: index
   }

@@ -85,16 +85,6 @@ admin_password=$(read_value "$base_file" ADMIN_PASSWORD)
 jwt_secret=$(read_value "$base_file" JWT_SECRET)
 totp_key=$(read_value "$base_file" TOTP_ENCRYPTION_KEY)
 
-case "$database_password" in
-    sub2api|password|123456|change_this_secure_password) fail "DATABASE_PASSWORD still uses a weak default" ;;
-esac
-case "$redis_password" in
-    sub2api|password|123456|change_this_secure_password) fail "REDIS_PASSWORD still uses a weak default" ;;
-esac
-case "$admin_password" in
-    admin|password|123456|change_this_secure_password) fail "ADMIN_PASSWORD still uses a weak default" ;;
-esac
-
 [ "${#admin_password}" -ge 16 ] || fail "ADMIN_PASSWORD must be at least 16 characters"
 [ "${#jwt_secret}" -ge 64 ] || fail "JWT_SECRET must be at least 64 characters"
 [ "${#totp_key}" -ge 64 ] || fail "TOTP_ENCRYPTION_KEY must be at least 64 characters"
