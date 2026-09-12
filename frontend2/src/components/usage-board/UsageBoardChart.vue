@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UsageBoardCoverage, UsageBoardDataState, UsageBoardGranularity, type UsageBoardResponse } from '@/api/usageBoard'
-import { boardChartGeometry, formatUsageBoardTokens, UsageBoardChartType } from '@shared-utils/usageBoard'
+import { boardChartGeometry, formatUsageBoardTokens, usageBoardTokenUnit, UsageBoardChartType } from '@shared-utils/usageBoard'
 
 const props = defineProps<{ data: UsageBoardResponse; type: UsageBoardChartType }>()
 const { t } = useI18n()
@@ -24,7 +24,7 @@ onMounted(() => {
 onUnmounted(() => observer?.disconnect())
 function accessiblePeriod(index: number): string {
   const period = props.data.periods[index]
-  return `${period.label}: ${props.data.series.map((series) => `${series.api_key_name}: ${series.points[index].data_state === UsageBoardDataState.MISSING ? `0 ${t('usageBoard.tokenUnit')} · ${t('usageBoard.noData')}` : `${formatUsageBoardTokens(series.points[index].total_tokens)} ${t('usageBoard.tokenUnit')}`}`).join('; ')}`
+  return `${period.label}: ${geometry.value.series.map((series) => `${series.api_key_name}: ${series.points[index].data_state === UsageBoardDataState.MISSING ? `0 ${usageBoardTokenUnit(0)} · ${t('usageBoard.noData')}` : `${formatUsageBoardTokens(series.points[index].total_tokens)} ${usageBoardTokenUnit(series.points[index].total_tokens)}`}`).join('; ')}`
 }
 </script>
 
@@ -40,7 +40,7 @@ function accessiblePeriod(index: number): string {
           <line :x1="geometry.left" :x2="geometry.width - 24" :y1="tick.y" :y2="tick.y" class="board-grid" />
           <text :x="geometry.left - 12" :y="tick.y + 4" text-anchor="end" class="board-axis">{{ formatUsageBoardTokens(tick.value) }}</text>
         </g>
-        <text :x="12" :y="13" class="board-axis">{{ t('usageBoard.tokenUnit') }}</text>
+        <text :x="12" :y="13" class="board-axis">{{ usageBoardTokenUnit(geometry.maxValue) }} Tokens</text>
         <g v-for="series in geometry.series" :key="series.api_key_id ?? 'empty'" :data-series-key="series.api_key_id">
           <template v-if="type === UsageBoardChartType.LINE">
             <line v-for="segment in series.segments" :key="segment.to.period_start" :x1="segment.from.x" :y1="segment.from.y" :x2="segment.to.x" :y2="segment.to.y" :stroke="segment.missing ? '#94a3b8' : series.color" :stroke-dasharray="segment.missing ? '5 5' : undefined" stroke-width="2" />
@@ -69,8 +69,8 @@ function accessiblePeriod(index: number): string {
         <div class="board-tooltip-series">
           <div v-for="series in geometry.series" :key="series.api_key_id ?? 'empty'">
             <span><i :style="{ background: series.color }" />{{ series.api_key_id === null ? '—' : series.api_key_name }}</span>
-            <span v-if="series.points[activePeriod].data_state === UsageBoardDataState.MISSING" class="board-missing-text">0 {{ t('usageBoard.tokenUnit') }} · {{ t('usageBoard.noData') }}</span>
-            <b v-else>{{ formatUsageBoardTokens(series.points[activePeriod].total_tokens) }} {{ t('usageBoard.tokenUnit') }}</b>
+            <span v-if="series.points[activePeriod].data_state === UsageBoardDataState.MISSING" class="board-missing-text">0 {{ usageBoardTokenUnit(0) }} · {{ t('usageBoard.noData') }}</span>
+            <b v-else>{{ formatUsageBoardTokens(series.points[activePeriod].total_tokens) }} {{ usageBoardTokenUnit(series.points[activePeriod].total_tokens) }} Tokens</b>
           </div>
         </div>
       </template>
@@ -92,7 +92,7 @@ svg { display: block; }
 .board-missing-marker { fill: var(--board-bg); stroke: #94a3b8; stroke-width: 1.5; }
 .board-chart-target { cursor: crosshair; }
 .board-chart-target:focus-visible { outline: 2px solid var(--board-accent); outline-offset: -2px; }
-.board-tooltip { position: absolute; top: 48px; right: 8px; z-index: 10; width: 320px; max-width: calc(100% - 16px); max-height: 220px; overflow: auto; padding: 12px; border-radius: 8px; background: rgb(17 24 39 / 95%); color: #f9fafb; box-shadow: 0 4px 16px #0002; font-size: 12px; pointer-events: none; }
+.board-tooltip { position: absolute; top: 48px; right: 8px; z-index: 10; width: 320px; max-width: calc(100% - 16px); max-height: min(60vh, 420px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 12px; border-radius: 8px; background: rgb(17 24 39 / 95%); color: #f9fafb; box-shadow: 0 4px 16px #0002; font-size: 12px; pointer-events: auto; }
 .board-tooltip > span { color: var(--board-muted); }
 .board-tooltip strong { display: block; margin-bottom: 8px; }
 .board-tooltip strong small { margin-left: 5px; font-weight: 400; color: var(--board-muted); }

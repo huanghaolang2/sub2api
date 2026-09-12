@@ -8,10 +8,17 @@ export enum UsageBoardChoiceKind { KEY = 'key', GROUP = 'group' }
 export interface UsageBoardChoice { id: number; label: string }
 
 const USAGE_BOARD_TOKEN_UNIT = 1_000_000
+const USAGE_BOARD_TOKEN_LARGE_UNIT = 100_000_000
 
 /** Format raw token counts as millions for every usage-board display. */
 export function formatUsageBoardTokens(value: number): string {
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value / USAGE_BOARD_TOKEN_UNIT)
+  const safeValue = Number.isFinite(value) ? value : 0
+  const divisor = Math.abs(safeValue) >= USAGE_BOARD_TOKEN_LARGE_UNIT ? USAGE_BOARD_TOKEN_LARGE_UNIT : USAGE_BOARD_TOKEN_UNIT
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(safeValue / divisor)
+}
+
+export function usageBoardTokenUnit(value: number): string {
+  return Math.abs(Number(value) || 0) >= USAGE_BOARD_TOKEN_LARGE_UNIT ? '亿' : '百万'
 }
 
 export function boardLocalDate(date: Date): string {
@@ -50,7 +57,11 @@ export function boardChartGeometry(data: UsageBoardResponse, type: UsageBoardCha
   const step = (width - left - 24) / Math.max(data.periods.length, 1)
   const maxValue = data.series.reduce((highest, series) => series.points.reduce((value, point) => Math.max(value, point.total_tokens), highest), 1)
   const barWidth = Math.max(1, Math.min(28, step * 0.8 / Math.max(data.series.length, 1)))
-  const series = data.series.map((entry, seriesIndex) => {
+  const series = [...data.series].sort((left, right) => {
+    const leftTotal = left.points.reduce((sum, point) => sum + point.total_tokens, 0)
+    const rightTotal = right.points.reduce((sum, point) => sum + point.total_tokens, 0)
+    return rightTotal - leftTotal || String(left.api_key_name).localeCompare(String(right.api_key_name))
+  }).map((entry, seriesIndex) => {
     const points = entry.points.map((point, index) => {
       const center = left + step * (index + 0.5)
       const x = type === UsageBoardChartType.BAR ? center + (seriesIndex - (data.series.length - 1) / 2) * barWidth : center

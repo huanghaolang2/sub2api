@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DashboardStats } from '@/types/user'
+import { formatUsageBoardTokens, usageBoardTokenUnit } from '@shared-utils/usageBoard'
 
 interface RankingItem { name: string; usage: number }
 interface PeriodStats { users: number; usage: number; ranking: RankingItem[]; error: string }
 const props = defineProps<{ stats: DashboardStats | null; periodStats: { today: PeriodStats; week: PeriodStats; month: PeriodStats }; loading: boolean }>()
-const formatMillions = (value: number): string => (Number(value || 0) / 1_000_000).toFixed(2)
+const formatAmount = (value: number): string => `${formatUsageBoardTokens(value)} ${usageBoardTokenUnit(value)} Tokens`
 const periods = computed(() => [
-  { key: 'today', label: '当天使用', ...props.periodStats.today, usageLabel: formatMillions(props.periodStats.today.usage) },
-  { key: 'week', label: '当周使用', ...props.periodStats.week, usageLabel: formatMillions(props.periodStats.week.usage) },
-  { key: 'month', label: '当月使用', ...props.periodStats.month, usageLabel: formatMillions(props.periodStats.month.usage) }
+  { key: 'today', label: '当天使用', ...props.periodStats.today, usageLabel: formatAmount(props.periodStats.today.usage) },
+  { key: 'week', label: '当周使用', ...props.periodStats.week, usageLabel: formatAmount(props.periodStats.week.usage) },
+  { key: 'month', label: '当月使用', ...props.periodStats.month, usageLabel: formatAmount(props.periodStats.month.usage) }
 ])
 const rankings = computed(() => [
   { key: 'today', label: '当天 Top 3', ...props.periodStats.today },
@@ -32,7 +33,7 @@ const rankings = computed(() => [
         <header><h3>{{ ranking.label }}</h3><span>API Key · Tokens</span></header>
         <div v-if="ranking.error" class="dashboard-ranking-state is-error" role="alert">{{ ranking.error }}</div>
         <div v-else-if="ranking.ranking.length === 0" class="dashboard-ranking-state">暂无有效 Token 使用</div>
-        <ol v-else><li v-for="(item, index) in ranking.ranking" :key="`${item.name}-${index}`"><span>{{ index + 1 }}</span><strong :title="item.name">{{ item.name }}</strong><b>{{ formatMillions(item.usage) }} <em>百万 Tokens</em></b></li></ol>
+        <ol v-else><li v-for="(item, index) in ranking.ranking" :key="`${item.name}-${index}`"><span>{{ index + 1 }}</span><strong :title="item.name">{{ item.name }}</strong><b>{{ formatUsageBoardTokens(item.usage) }} {{ usageBoardTokenUnit(item.usage) }} Tokens</b></li></ol>
       </article>
     </div>
   </section>
