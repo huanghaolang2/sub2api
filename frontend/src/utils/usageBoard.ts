@@ -7,6 +7,13 @@ export enum UsageBoardValidation { VALID = 'valid', REQUIRED = 'required', INVAL
 export enum UsageBoardChoiceKind { KEY = 'key', GROUP = 'group' }
 export interface UsageBoardChoice { id: number; label: string }
 
+const USAGE_BOARD_TOKEN_UNIT = 1_000_000
+
+/** Format raw token counts as millions for every usage-board display. */
+export function formatUsageBoardTokens(value: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value / USAGE_BOARD_TOKEN_UNIT)
+}
+
 export function boardLocalDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }

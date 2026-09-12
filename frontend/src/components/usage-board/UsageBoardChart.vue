@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UsageBoardCoverage, UsageBoardDataState, UsageBoardGranularity, type UsageBoardResponse } from '@/api/usageBoard'
-import { boardChartGeometry, UsageBoardChartType } from '@/utils/usageBoard'
+import { boardChartGeometry, formatUsageBoardTokens, UsageBoardChartType } from '@/utils/usageBoard'
 
 const props = defineProps<{ data: UsageBoardResponse; type: UsageBoardChartType }>()
 const { t } = useI18n()
@@ -19,10 +19,9 @@ onMounted(() => {
   }
 })
 onUnmounted(() => observer?.disconnect())
-function compact(value: number): string { return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value) }
 function accessiblePeriod(index: number): string {
   const period = props.data.periods[index]
-  return `${period.label}: ${props.data.series.map((series) => `${series.api_key_name}: ${series.points[index].data_state === UsageBoardDataState.MISSING ? t('usageBoard.noData') : series.points[index].total_tokens.toLocaleString()}`).join('; ')}`
+  return `${period.label}: ${props.data.series.map((series) => `${series.api_key_name}: ${series.points[index].data_state === UsageBoardDataState.MISSING ? `0 ${t('usageBoard.tokenUnit')} · ${t('usageBoard.noData')}` : `${formatUsageBoardTokens(series.points[index].total_tokens)} ${t('usageBoard.tokenUnit')}`}`).join('; ')}`
 }
 </script>
 
@@ -36,9 +35,9 @@ function accessiblePeriod(index: number): string {
         <title>{{ t('usageBoard.chartLabel') }}</title>
         <g v-for="tick in geometry.ticks" :key="tick.y">
           <line :x1="geometry.left" :x2="geometry.width - 24" :y1="tick.y" :y2="tick.y" class="board-grid" />
-          <text :x="geometry.left - 12" :y="tick.y + 4" text-anchor="end" class="board-axis">{{ compact(tick.value) }}</text>
+          <text :x="geometry.left - 12" :y="tick.y + 4" text-anchor="end" class="board-axis">{{ formatUsageBoardTokens(tick.value) }}</text>
         </g>
-        <text :x="12" :y="13" class="board-axis">tokens</text>
+        <text :x="12" :y="13" class="board-axis">{{ t('usageBoard.tokenUnit') }}</text>
         <g v-for="series in geometry.series" :key="series.api_key_id ?? 'empty'" :data-series-key="series.api_key_id">
           <template v-if="type === UsageBoardChartType.LINE">
             <line v-for="segment in series.segments" :key="segment.to.period_start" :x1="segment.from.x" :y1="segment.from.y" :x2="segment.to.x" :y2="segment.to.y" :stroke="segment.missing ? '#94a3b8' : series.color" :stroke-dasharray="segment.missing ? '5 5' : undefined" stroke-width="2" />
@@ -67,8 +66,8 @@ function accessiblePeriod(index: number): string {
         <div class="board-tooltip-series">
           <div v-for="series in geometry.series" :key="series.api_key_id ?? 'empty'">
             <span><i :style="{ background: series.color }" />{{ series.api_key_id === null ? '—' : series.api_key_name }}</span>
-            <span v-if="series.points[activePeriod].data_state === UsageBoardDataState.MISSING" class="board-missing-text">0 · {{ t('usageBoard.noData') }}</span>
-            <b v-else>{{ series.points[activePeriod].total_tokens.toLocaleString() }} tokens</b>
+            <span v-if="series.points[activePeriod].data_state === UsageBoardDataState.MISSING" class="board-missing-text">0 {{ t('usageBoard.tokenUnit') }} · {{ t('usageBoard.noData') }}</span>
+            <b v-else>{{ formatUsageBoardTokens(series.points[activePeriod].total_tokens) }} {{ t('usageBoard.tokenUnit') }}</b>
           </div>
         </div>
       </template>

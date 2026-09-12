@@ -2,39 +2,64 @@
   <AppLayout>
     <div class="space-y-6">
       <div v-if="loading" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
+      <div v-else-if="statsError" class="py-12 text-center text-sm text-red-500" role="alert">{{ statsError }}</div>
       <template v-else-if="stats">
-        <UserDashboardStats :stats="stats" :balance="user?.balance || 0" :is-simple="authStore.isSimpleMode" :platform-quotas="platformQuotas" />
-        <UserDashboardCharts v-model:startDate="startDate" v-model:endDate="endDate" v-model:granularity="granularity" :loading="loadingCharts" :trend="trendData" :models="modelStats" @dateRangeChange="loadCharts" @granularityChange="loadCharts" @refresh="refreshAll" />
-        <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div class="lg:col-span-2"><UserDashboardRecentUsage :data="recentUsage" :loading="loadingUsage" /></div>
-          <div class="lg:col-span-1"><UserDashboardQuickActions /></div>
-        </div>
+        <UserDashboardStats :stats="stats" :loading="loading" :period-stats="periodStats" :period-loading="periodLoading" :error="statsError" />
+        <UserDashboardQuickActions />
       </template>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'; import { useAuthStore } from '@/stores/auth'; import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
+import { ref, onMounted } from 'vue'; import { useAuthStore } from '@/stores/auth'; import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
+import { getUsageBoard, UsageBoardGranularity, UsageBoardScope, UsageBoardSortOrder } from '@/api/usageBoard'
 import AppLayout from '@/components/layout/AppLayout.vue'; import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'; import UserDashboardCharts from '@/components/user/dashboard/UserDashboardCharts.vue'
-import UserDashboardRecentUsage from '@/components/user/dashboard/UserDashboardRecentUsage.vue'; import UserDashboardQuickActions from '@/components/user/dashboard/UserDashboardQuickActions.vue'
-import type { UsageLog, TrendDataPoint, ModelStat, PlatformQuotaItem } from '@/types'
-import { getMyPlatformQuotas } from '@/api/user'
+import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'; import UserDashboardQuickActions from '@/components/user/dashboard/UserDashboardQuickActions.vue'
 import { formatDateLocalInput } from '@/utils/format'
 
-const authStore = useAuthStore(); const user = computed(() => authStore.user)
-const stats = ref<UserStatsType | null>(null); const loading = ref(false); const loadingUsage = ref(false); const loadingCharts = ref(false)
-const trendData = ref<TrendDataPoint[]>([]); const modelStats = ref<ModelStat[]>([]); const recentUsage = ref<UsageLog[]>([])
-const platformQuotas = ref<PlatformQuotaItem[] | null>(null)
+const authStore = useAuthStore()
+const stats = ref<UserStatsType | null>(null); const loading = ref(false); const periodLoading = ref(false); const statsError = ref('')
+const periodStats = ref({
+  today: { users: 0, usage: 0, ranking: [] as Array<{ name: string; usage: number }>, error: '' },
+  week: { users: 0, usage: 0, ranking: [] as Array<{ name: string; usage: number }>, error: '' },
+  month: { users: 0, usage: 0, ranking: [] as Array<{ name: string; usage: number }>, error: '' }
+})
 
-const startDate = ref(formatDateLocalInput(new Date(Date.now() - 6 * 86400000))); const endDate = ref(formatDateLocalInput(new Date())); const granularity = ref('day')
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+const today = () => new Date()
+const dateValue = (value: Date) => formatDateLocalInput(value)
+const rangeStart = (kind: 'week' | 'month'): string => {
+  const now = today()
+  if (kind === 'month') return dateValue(new Date(now.getFullYear(), now.getMonth(), 1))
+  const mondayOffset = (now.getDay() + 6) % 7
+  return dateValue(new Date(now.getFullYear(), now.getMonth(), now.getDate() - mondayOffset))
+}
+const sumBoard = (result: Awaited<ReturnType<typeof getUsageBoard>>) => ({
+  users: result.series.filter((series) => series.points.some((point) => point.total_tokens > 0)).length,
+  usage: result.series.reduce((sum, series) => sum + series.points.reduce((periodSum, point) => periodSum + point.total_tokens, 0), 0),
+  ranking: result.series.map((series) => ({ name: series.api_key_name, usage: series.points.reduce((sum, point) => sum + point.total_tokens, 0) })).filter((item) => item.usage > 0).sort((a, b) => b.usage - a.usage).slice(0, 3)
+})
 
-const loadStats = async () => { loading.value = true; try { await authStore.refreshUser(); stats.value = await usageAPI.getDashboardStats() } catch (error) { console.error('Failed to load dashboard stats:', error) } finally { loading.value = false } }
-const loadCharts = async () => { loadingCharts.value = true; try { const res = await Promise.all([usageAPI.getDashboardTrend({ start_date: startDate.value, end_date: endDate.value, granularity: granularity.value as any }), usageAPI.getDashboardModels({ start_date: startDate.value, end_date: endDate.value })]); trendData.value = res[0].trend || []; modelStats.value = res[1].models || [] } catch (error) { console.error('Failed to load charts:', error) } finally { loadingCharts.value = false } }
-const loadRecent = async () => { loadingUsage.value = true; try { const res = await usageAPI.getByDateRange(startDate.value, endDate.value); recentUsage.value = res.items.slice(0, 5) } catch (error) { console.error('Failed to load recent usage:', error) } finally { loadingUsage.value = false } }
-const loadPlatformQuotas = async () => { try { const data = await getMyPlatformQuotas(); platformQuotas.value = data.platform_quotas ?? [] } catch (error) { console.warn('Failed to load platform quotas:', error); platformQuotas.value = [] } }
-const refreshAll = () => { loadStats(); loadCharts(); loadRecent(); loadPlatformQuotas() }
+const loadStats = async () => { loading.value = true; statsError.value = ''; try { await authStore.refreshUser(); stats.value = await usageAPI.getDashboardStats(); return stats.value } catch (error) { statsError.value = error instanceof Error ? error.message : '仪表盘统计加载失败'; return null } finally { loading.value = false } }
+const loadPeriodStats = async () => {
+  periodLoading.value = true
+  const end = dateValue(today())
+  const ranges = (['today', 'week', 'month'] as const).map((kind) => getUsageBoard(UsageBoardScope.SELF, {
+    granularity: kind === 'today' ? UsageBoardGranularity.DAY : kind === 'week' ? UsageBoardGranularity.WEEK : UsageBoardGranularity.MONTH,
+    ...(kind === 'today' || kind === 'week' ? { start_date: kind === 'today' ? end : rangeStart('week'), end_date: end } : { start_month: end.slice(0, 7), end_month: end.slice(0, 7) }),
+    timezone, api_key_ids: [], group_ids: [], sort_order: UsageBoardSortOrder.DESC, page: 1, page_size: 1000
+  }))
+  const results = await Promise.allSettled(ranges)
+  for (const [index, kind] of (['today', 'week', 'month'] as const).entries()) {
+    const result = results[index]
+    periodStats.value[kind] = result.status === 'fulfilled'
+      ? { ...sumBoard(result.value), error: '' }
+      : { users: 0, usage: 0, ranking: [], error: result.reason instanceof Error ? result.reason.message : '统计加载失败' }
+  }
+  periodLoading.value = false
+}
+const refreshAll = async () => { await loadStats(); await loadPeriodStats() }
 
-onMounted(() => { refreshAll() })
+onMounted(() => { void refreshAll() })
 </script>

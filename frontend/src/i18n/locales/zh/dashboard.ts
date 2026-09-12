@@ -2,6 +2,12 @@ export default {
   dashboard: {
     title: '仪表盘',
     welcomeMessage: '欢迎回来！这是您账户的概览。',
+    loading: '加载中…',
+    copywriterTotalUsers: '文案总人数', currentApiKeyCount: '当前 API Key 数',
+    todayActiveUsers: '当天使用人数', todayUsage: '当天使用量',
+    weekActiveUsers: '当周使用人数', weekUsage: '当周使用量',
+    monthActiveUsers: '当月使用人数', monthUsage: '当月使用量',
+    validTokenUsage: '有有效 Token 使用', noValidTokenUsage: '无有效使用记录',
     balance: '余额',
     apiKeys: 'API 密钥',
     todayRequests: '今日请求',

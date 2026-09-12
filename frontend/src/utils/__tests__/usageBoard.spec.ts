@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { UsageBoardCoverage, UsageBoardDataState, UsageBoardGranularity, type UsageBoardResponse } from '../../api/usageBoard'
-import { boardChartGeometry, boardDefaultRange, boardMonthLastDay, validateBoardRange, UsageBoardChartType, UsageBoardValidation } from '../usageBoard'
+import { boardChartGeometry, boardDefaultRange, boardMonthLastDay, formatUsageBoardTokens, validateBoardRange, UsageBoardChartType, UsageBoardValidation } from '../usageBoard'
 
 describe('usage board presentation', () => {
+  it('formats all displayed token counts as millions', () => {
+    expect(formatUsageBoardTokens(0)).toBe('0')
+    expect(formatUsageBoardTokens(1_250_000)).toBe('1.25')
+  })
   it('uses calendar dates for defaults and validates leap days, months and order', () => {
     expect(boardDefaultRange(new Date(2026, 0, 3, 12))).toEqual({ start: '2025-12-28', end: '2026-01-03' })
     expect(boardMonthLastDay('2024-02')).toBe('2024-02-29')

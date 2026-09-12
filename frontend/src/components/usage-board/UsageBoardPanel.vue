@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { UsageBoardCoverage, UsageBoardDataState, UsageBoardGranularity, UsageBoardScope, UsageBoardSortOrder, type UsageBoardRow } from '@/api/usageBoard'
 import { useUsageBoard } from '@/composables/useUsageBoard'
-import { UsageBoardChartType, UsageBoardChoiceKind, UsageBoardLoadState, UsageBoardValidation } from '@/utils/usageBoard'
+import { formatUsageBoardTokens, UsageBoardChartType, UsageBoardChoiceKind, UsageBoardLoadState, UsageBoardValidation } from '@/utils/usageBoard'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -83,7 +83,7 @@ function onSort(_key: string, order: 'asc' | 'desc'): void {
       <DataTable :columns="columns" :data="data.rows" :row-key="rowKey" :server-side-sort="true" default-sort-key="total_tokens" :default-sort-order="sortOrder" @sort="onSort">
         <template #header-total_tokens><button type="button" data-testid="board-token-sort">{{ t('usageBoard.tokens') }}</button></template>
         <template #cell-period_label="{ row }"><span>{{ row.period_label }}</span><span v-if="row.coverage === UsageBoardCoverage.PARTIAL" class="ml-2 text-xs text-gray-400 dark:text-dark-400">{{ t('usageBoard.partial') }}</span></template>
-        <template #cell-total_tokens="{ row }"><span class="inline-flex items-center justify-end gap-2 tabular-nums" :data-state="row.data_state"><span>{{ row.total_tokens.toLocaleString() }}</span><span v-if="row.data_state === UsageBoardDataState.MISSING" class="rounded border border-dashed border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 dark:border-dark-600 dark:text-dark-400">{{ t('usageBoard.noData') }}</span></span></template>
+        <template #cell-total_tokens="{ row }"><span class="inline-flex items-center justify-end gap-2 tabular-nums" :data-state="row.data_state"><span>{{ formatUsageBoardTokens(row.total_tokens) }} {{ t('usageBoard.tokenUnit') }}</span><span v-if="row.data_state === UsageBoardDataState.MISSING" class="rounded border border-dashed border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 dark:border-dark-600 dark:text-dark-400">{{ t('usageBoard.noData') }}</span></span></template>
       </DataTable>
       <Pagination :page="data.pagination.page" :total="data.pagination.total" :page-size="pageSize" @update:page="setPage" @update:pageSize="setPageSize" />
     </div>

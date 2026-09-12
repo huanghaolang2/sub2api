@@ -2,6 +2,12 @@ export default {
   dashboard: {
     title: 'Dashboard',
     welcomeMessage: "Welcome back! Here's an overview of your account.",
+    loading: 'Loading…',
+    copywriterTotalUsers: 'Total copy users', currentApiKeyCount: 'Current API key count',
+    todayActiveUsers: 'Today active users', todayUsage: 'Today usage',
+    weekActiveUsers: 'This week active users', weekUsage: 'This week usage',
+    monthActiveUsers: 'This month active users', monthUsage: 'This month usage',
+    validTokenUsage: 'With valid token usage', noValidTokenUsage: 'No valid usage records',
     balance: 'Balance',
     apiKeys: 'API Keys',
     todayRequests: 'Today Requests',
