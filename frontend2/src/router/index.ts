@@ -169,8 +169,15 @@ const routes: RouteRecordRaw[] = [
     path: '/app/usage',
     alias: '/usage',
     name: 'app-usage',
-    component: () => import('@/views/user/UsageView.vue'),
-    meta: { requiresAuth: true, title: '用量明细', hideInSimpleMode: true }
+    component: () => import('@/views/user/UsageBoardView.vue'),
+    meta: { requiresAuth: true, title: '使用看板' }
+  },
+  {
+    path: '/app/usage-board',
+    alias: '/usage-board',
+    name: 'app-usage-board',
+    component: () => import('@/views/user/UsageBoardView.vue'),
+    meta: { requiresAuth: true, title: '使用看板' }
   },
   {
     path: '/app/models',

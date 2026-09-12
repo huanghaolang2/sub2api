@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import UsageBoardPanel from '@/components/usage-board/UsageBoardPanel.vue'
+import { UsageBoardScope } from '@/api/usageBoard'
+import { UsageViewSection } from '@shared-utils/usageBoard'
+import { useI18n } from 'vue-i18n'
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import * as authAPI from '@shared-api/auth'
 import * as groupsAPI from '@shared-api/groups'
@@ -519,6 +523,15 @@ onBeforeUnmount(() => {
   listController?.abort()
   requestSequence += 1
 })
+
+const usageSection = ref(UsageViewSection.STATISTICS)
+const usageBoardMounted = ref(false)
+function openUsageBoard(): void {
+  usageBoardMounted.value = true
+  usageSection.value = UsageViewSection.BOARD
+}
+const { t: boardT } = useI18n()
+
 </script>
 
 <template>
@@ -526,8 +539,15 @@ onBeforeUnmount(() => {
     <section class="usage-page">
       <header class="page-heading usage-heading">
         <div><p>消费洞察 · 服务端全量查询</p><h1>用量与错误日志</h1><span>从费用趋势下钻到单次调用，并保留完整账单和失败上下文。</span></div>
-        <div class="heading-actions"><button class="button button--secondary" type="button" :disabled="listLoading || analyticsLoading" @click="refreshAll">刷新</button><button class="button button--primary" type="button" :disabled="exporting || pagination.total === 0" @click="exportCsv">{{ exporting ? '导出中…' : '导出完整 CSV' }}</button></div>
+        <div v-show="usageSection === UsageViewSection.STATISTICS" class="heading-actions"><button class="button button--secondary" type="button" :disabled="listLoading || analyticsLoading" @click="refreshAll">刷新</button><button class="button button--primary" type="button" :disabled="exporting || pagination.total === 0" @click="exportCsv">{{ exporting ? '导出中…' : '导出完整 CSV' }}</button></div>
       </header>
+      <nav class="resource-tabs" role="tablist" :aria-label="boardT('usageBoard.title')">
+        <button type="button" role="tab" :aria-selected="usageSection === UsageViewSection.STATISTICS" aria-controls="usage-statistics-panel" data-testid="usage-statistics-tab" @click="usageSection = UsageViewSection.STATISTICS">{{ boardT('usageBoard.statistics') }}</button>
+        <button type="button" role="tab" :aria-selected="usageSection === UsageViewSection.BOARD" aria-controls="usage-board-panel" data-testid="usage-board-tab" @click="openUsageBoard">{{ boardT('usageBoard.title') }}</button>
+      </nav>
+      <UsageBoardPanel v-if="usageBoardMounted" v-show="usageSection === UsageViewSection.BOARD" id="usage-board-panel" role="tabpanel" :scope="UsageBoardScope.SELF" />
+      <div v-show="usageSection === UsageViewSection.STATISTICS" id="usage-statistics-panel" role="tabpanel" class="usage-statistics-panel">
+
 
       <section class="range-bar" aria-label="统计时间范围">
         <label><span>开始日期</span><input v-model="filters.startDate" type="date"></label>
@@ -640,6 +660,7 @@ onBeforeUnmount(() => {
           <footer v-if="errorPagination.total > 0" class="pagination-bar"><p>第 {{ errorPagination.page }} / {{ errorPagination.pages }} 页 · 共 {{ errorPagination.total }} 条</p><label>每页 <select :value="errorPagination.pageSize" @change="changeErrorPageSize"><option v-for="size in pageSizes" :key="size" :value="size">{{ size }}</option></select> 条</label><nav><button type="button" :disabled="errorPagination.page <= 1" @click="changeErrorPage(errorPagination.page - 1)">上一页</button><button type="button" :disabled="errorPagination.page >= errorPagination.pages" @click="changeErrorPage(errorPagination.page + 1)">下一页</button></nav></footer>
         </template>
       </section>
+      </div>
     </section>
 
     <SurfaceDialog :show="usageDetailOpen" title="单次调用账单" :description="selectedLog ? `请求 ${selectedLog.request_id}` : ''" :width="DialogWidth.WIDE" @close="usageDetailOpen = false">
@@ -671,4 +692,8 @@ onBeforeUnmount(() => {
 .usage-detail { display: grid; gap: 13px; }.detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border-subtle); border-radius: 11px; overflow: hidden; }.detail-grid > div { min-width: 0; padding: 11px; display: grid; gap: 5px; border-right: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); }.detail-grid > div:nth-child(3n) { border-right: 0; }.detail-grid > div:nth-last-child(-n+3) { border-bottom: 0; }.detail-grid span, .token-ledger span, .bill-total span { color: var(--text-secondary); font-size: var(--font-meta); text-transform: uppercase; letter-spacing: .05em; }.detail-grid strong { overflow-wrap: anywhere; font-size: var(--font-meta); }.token-ledger { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border-subtle); border: 1px solid var(--border-subtle); }.token-ledger > div { padding: 13px; display: grid; gap: 6px; background: var(--surface-canvas); }.token-ledger strong { font-size: 17px; }.token-ledger small { color: var(--text-secondary); font-size: var(--font-meta); }.bill-total { display: grid; grid-template-columns: repeat(4, 1fr); border-block: 1px solid var(--border-subtle); }.bill-total > div { padding: 14px; display: grid; gap: 7px; border-right: 1px solid var(--border-subtle); }.bill-total > div:last-child { border-right: 0; }.bill-total strong { font-size: 15px; }.detail-note { padding: 11px 13px; display: flex; align-items: baseline; gap: 10px; background: var(--surface-canvas); border-left: 3px solid var(--accent); border-radius: 5px; font-size: var(--font-meta); }.detail-note span, .detail-note code { color: var(--text-secondary); overflow-wrap: anywhere; }
 @media (max-width: 1120px) { .usage-metrics { grid-template-columns: repeat(3, 1fr); }.usage-metrics > div:nth-child(3) { border-right: 0; }.usage-metrics > div:nth-child(-n+3) { border-bottom: 1px solid var(--border-subtle); }.filter-panel { grid-template-columns: repeat(3, 1fr); }.error-filter-panel { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 760px) { .usage-heading { align-items: stretch; }.heading-actions { width: 100%; }.heading-actions .button { flex: 1; }.range-separator { display: none; }.range-bar label { flex: 1 1 130px; }.range-bar small { width: 100%; margin: 0; }.usage-metrics { grid-template-columns: repeat(2, 1fr); }.usage-metrics > div { padding: 13px 10px; border-bottom: 1px solid var(--border-subtle); }.usage-metrics > div:first-child { padding-left: 10px; }.usage-metrics > div:nth-child(odd) { border-right: 1px solid var(--border-subtle); }.usage-metrics > div:nth-child(even) { border-right: 0; }.analytics-grid { grid-template-columns: 1fr; }.filter-panel, .error-filter-panel { grid-template-columns: repeat(2, 1fr); }.column-picker { grid-column: span 2; }.column-picker > button { width: 100%; }.detail-grid, .token-ledger { grid-template-columns: 1fr 1fr; }.detail-grid > div { border-right: 1px solid var(--border-subtle) !important; border-bottom: 1px solid var(--border-subtle) !important; }.detail-grid > div:nth-child(even) { border-right: 0 !important; }.bill-total { grid-template-columns: 1fr 1fr; }.bill-total > div:nth-child(2) { border-right: 0; }.bill-total > div:nth-child(-n+2) { border-bottom: 1px solid var(--border-subtle); } }
+</style>
+
+<style scoped>
+.usage-statistics-panel { display: grid; gap: 24px; min-width: 0; }
 </style>

@@ -24,7 +24,7 @@ const adminSteps: TourStep[] = [
 const userSteps: TourStep[] = [
   { title: '欢迎使用新版工作台', description: '高频任务集中在顶部工作域，当前板块的相关页面会显示在二级导航中。' },
   { title: '创建 API Key', description: '创建 Key、配置分组、IP 规则、额度、周期限制和到期时间，并查看各客户端接入方式。', path: '/app/keys', action: '打开 API Key' },
-  { title: '查看用量与错误', description: '用量明细支持服务端筛选、排序、分页、CSV 导出和错误请求详情。', path: '/app/usage', action: '打开用量明细' },
+  { title: '使用看板', description: '按时间、API Key 和分组查看 tokens 用量趋势。', path: '/app/usage-board', action: '打开使用看板' },
   { title: '选择模型与价格', description: '模型页展示当前账号可用的模型、完整价格维度、倍率和官方参考价。', path: '/app/models', action: '打开模型与价格' },
   { title: '完善账户安全', description: '在个人设置中管理资料、通知邮箱、密码、第三方身份、TOTP、Passkey 和全部会话。', path: '/app/profile', action: '打开个人设置' },
 ]

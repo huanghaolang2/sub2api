@@ -1,6 +1,12 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
+      <nav class="tabs w-fit" role="tablist" :aria-label="t('usageBoard.title')">
+        <button type="button" role="tab" class="tab" :class="{ 'tab-active': usageSection === UsageViewSection.STATISTICS }" :aria-selected="usageSection === UsageViewSection.STATISTICS" aria-controls="usage-statistics-panel" data-testid="usage-statistics-tab" @click="usageSection = UsageViewSection.STATISTICS">{{ t('usageBoard.statistics') }}</button>
+        <button type="button" role="tab" class="tab" :class="{ 'tab-active': usageSection === UsageViewSection.BOARD }" :aria-selected="usageSection === UsageViewSection.BOARD" aria-controls="usage-board-panel" data-testid="usage-board-tab" @click="openUsageBoard">{{ t('usageBoard.title') }}</button>
+      </nav>
+      <UsageBoardPanel v-if="usageBoardMounted" v-show="usageSection === UsageViewSection.BOARD" id="usage-board-panel" role="tabpanel" :scope="UsageBoardScope.ADMIN" />
+      <div v-show="usageSection === UsageViewSection.STATISTICS" id="usage-statistics-panel" role="tabpanel" class="usage-statistics-panel">
       <UsageStatsCards :stats="usageStats" />
       <!-- Charts Section -->
       <div class="space-y-4">
@@ -164,6 +170,7 @@
         </div>
       </div>
       <OpsErrorDetailModal v-model:show="showErrorModal" :error-id="selectedErrorId" :error-type="'request'" />
+      </div>
     </div>
   </AppLayout>
   <UsageExportProgress :show="exportProgress.show" :progress="exportProgress.progress" :current="exportProgress.current" :total="exportProgress.total" :estimated-time="exportProgress.estimatedTime" @cancel="cancelExport" />
@@ -184,6 +191,9 @@
 </template>
 
 <script setup lang="ts">
+import UsageBoardPanel from '@/components/usage-board/UsageBoardPanel.vue'
+import { UsageBoardScope } from '@/api/usageBoard'
+import { UsageViewSection } from '@/utils/usageBoard'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { saveAs } from 'file-saver'
@@ -884,4 +894,16 @@ watch(modelDistributionSource, (source) => {
 })
 
 defineExpose({ requestedModelStats, refreshData })
+
+const usageSection = ref(UsageViewSection.STATISTICS)
+const usageBoardMounted = ref(false)
+function openUsageBoard(): void {
+  usageBoardMounted.value = true
+  usageSection.value = UsageViewSection.BOARD
+}
+
 </script>
+
+<style scoped>
+.usage-statistics-panel { display: grid; gap: 24px; min-width: 0; }
+</style>

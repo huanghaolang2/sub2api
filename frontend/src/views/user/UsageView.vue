@@ -1,6 +1,12 @@
 <template>
   <AppLayout>
     <div class="space-y-6">
+      <nav class="tabs w-fit" role="tablist" :aria-label="t('usageBoard.title')">
+        <button type="button" role="tab" class="tab" :class="{ 'tab-active': usageSection === UsageViewSection.STATISTICS }" :aria-selected="usageSection === UsageViewSection.STATISTICS" aria-controls="usage-statistics-panel" data-testid="usage-statistics-tab" @click="usageSection = UsageViewSection.STATISTICS">{{ t('usageBoard.statistics') }}</button>
+        <button type="button" role="tab" class="tab" :class="{ 'tab-active': usageSection === UsageViewSection.BOARD }" :aria-selected="usageSection === UsageViewSection.BOARD" aria-controls="usage-board-panel" data-testid="usage-board-tab" @click="openUsageBoard">{{ t('usageBoard.title') }}</button>
+      </nav>
+      <UsageBoardPanel v-if="usageBoardMounted" v-show="usageSection === UsageViewSection.BOARD" id="usage-board-panel" role="tabpanel" :scope="UsageBoardScope.SELF" />
+      <div v-show="usageSection === UsageViewSection.STATISTICS" id="usage-statistics-panel" role="tabpanel" class="usage-statistics-panel">
       <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
       <div class="space-y-4">
@@ -213,12 +219,16 @@
         @update:pageSize="onErrorPageSize"
         @ipGeoBatchFailed="handleIpGeoBatchFailed"
       />
+      </div>
     </div>
   </AppLayout>
 
 </template>
 
 <script setup lang="ts">
+import UsageBoardPanel from '@/components/usage-board/UsageBoardPanel.vue'
+import { UsageBoardScope } from '@/api/usageBoard'
+import { UsageViewSection } from '@/utils/usageBoard'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -909,4 +919,16 @@ onUnmounted(() => {
 watch(endpointDistributionSource, () => {
   // Endpoint source switching is handled by the chart component using already loaded stats.
 })
+
+const usageSection = ref(UsageViewSection.STATISTICS)
+const usageBoardMounted = ref(false)
+function openUsageBoard(): void {
+  usageBoardMounted.value = true
+  usageSection.value = UsageViewSection.BOARD
+}
+
 </script>
+
+<style scoped>
+.usage-statistics-panel { display: grid; gap: 24px; min-width: 0; }
+</style>

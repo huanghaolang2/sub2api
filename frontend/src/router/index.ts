@@ -232,14 +232,20 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/usage',
     name: 'Usage',
-    component: () => import('@/views/user/UsageView.vue'),
+    component: () => import('@/views/user/UsageBoardView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Usage Records',
-      titleKey: 'usage.title',
+      title: 'Usage Board',
+      titleKey: 'usageBoard.title',
       descriptionKey: 'usage.description'
     }
+  },
+  {
+    path: '/usage-board',
+    name: 'UsageBoard',
+    component: () => import('@/views/user/UsageBoardView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: false, title: 'Usage Board' }
   },
   {
     path: '/redeem',

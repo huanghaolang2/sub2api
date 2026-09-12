@@ -1,4 +1,6 @@
 import { createPinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
+import zh from '@shared-i18n/locales/zh'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiKey, Group, PublicSettings, UsageLog, UserErrorRequest } from '@/types'
@@ -14,6 +16,9 @@ const localStorageMock: Storage = {
   removeItem: (key) => { storageValues.delete(key) },
   setItem: (key, value) => { storageValues.set(key, String(value)) }
 }
+
+// Match the JIT flag used by the production Vite configuration.
+vi.hoisted(() => { vi.stubGlobal('__INTLIFY_JIT_COMPILATION__', true) })
 
 const api = vi.hoisted(() => ({
   query: vi.fn(),
@@ -109,7 +114,7 @@ function errorRow(): UserErrorRequest {
 async function mountView() {
   const wrapper = mount(UsageView, {
     global: {
-      plugins: [createPinia()],
+      plugins: [createPinia(), createI18n({ legacy: false, locale: 'zh', messages: { zh } })],
       stubs: {
         ConsoleShell: { template: '<main><slot /></main>' },
         PageState: { template: '<section><slot /></section>' },

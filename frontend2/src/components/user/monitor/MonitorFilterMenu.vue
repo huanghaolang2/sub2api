@@ -34,6 +34,7 @@ function toggle(value: string): void {
           清空
         </button>
       </header>
+      <slot name="search" />
       <label
         v-for="option in options"
         :key="option.value"
@@ -45,9 +46,10 @@ function toggle(value: string): void {
         >
         <span>{{ option.label }}</span><small v-if="option.count != null">{{ option.count }}</small>
       </label>
-      <p v-if="options.length === 0">
-        当前范围暂无选项
-      </p>
+      <slot name="empty" v-if="options.length === 0">
+        <p>当前范围暂无选项</p>
+      </slot>
+      <slot name="footer" />
     </div>
   </details>
 </template>

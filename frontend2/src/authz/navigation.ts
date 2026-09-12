@@ -9,6 +9,7 @@ export enum ConsoleAudience {
 export enum ConsoleSection {
   USER_HOME = 'user_home',
   USER_DEVELOPMENT = 'user_development',
+  USER_USAGE_BOARD = 'user_usage_board',
   USER_OBSERVABILITY = 'user_observability',
   USER_BILLING = 'user_billing',
   USER_ACCOUNT = 'user_account',
@@ -81,13 +82,22 @@ export const consoleSections: ConsoleSectionDefinition[] = [
     ]
   },
   {
+    id: ConsoleSection.USER_USAGE_BOARD,
+    audience: ConsoleAudience.USER,
+    label: '使用看板',
+    shortLabel: '看板',
+    mode: SecondaryNavigationMode.NONE,
+    items: [
+      { label: '使用看板', to: '/app/usage-board', permission: Permission.USAGE_READ_SELF }
+    ]
+  },
+  {
     id: ConsoleSection.USER_OBSERVABILITY,
     audience: ConsoleAudience.USER,
-    label: '用量与日志',
-    shortLabel: '用量',
-    mode: SecondaryNavigationMode.TABS,
+    label: '服务状态',
+    shortLabel: '服务',
+    mode: SecondaryNavigationMode.NONE,
     items: [
-      { label: '用量明细', to: '/app/usage', permission: Permission.USAGE_READ_SELF, hideInSimpleMode: true },
       {
         label: '服务状态',
         to: '/app/monitor',
