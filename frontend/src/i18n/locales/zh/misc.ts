@@ -8,6 +8,7 @@ export default {
     trend: 'Tokens 用量趋势', chartType: '图表类型', line: '折线图', bar: '柱状图', legend: 'API Key 图例', chartLabel: '各 API Key 按时间段的 tokens 用量', tokenUnit: 'Tokens',
     chartHint: '悬停、点击或通过键盘聚焦时间段，查看各 API Key 的用量。', missingHint: '灰色空心标识表示无数据补零；系列色的零点或基线表示真实用量为 0。',
     partial: '部分日期', noData: '无数据', results: '用量结果', rowCount: '共 {count} 条', period: '时间段', tokens: '总 tokens 用量',
+    totalUsage: '总用量',
     pageSize: '每页', previous: '上一页', next: '下一页',
     validation: { required: '请选择完整的开始和结束时间。', invalid: '请输入有效日期或月份。', reversed: '开始时间不能晚于结束时间。' }
   },

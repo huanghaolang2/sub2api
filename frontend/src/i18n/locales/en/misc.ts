@@ -8,6 +8,7 @@ export default {
     trend: 'Token usage trend', chartType: 'Chart type', line: 'Line', bar: 'Bar', legend: 'API key legend', chartLabel: 'Tokens by API key and time period', tokenUnit: 'Tokens',
     chartHint: 'Hover, click, or focus a time period to inspect usage for each API key.', missingHint: 'Gray outlined markers indicate missing data filled with zero; colored zero points or baselines indicate observed zero usage.',
     partial: 'Partial period', noData: 'No data', results: 'Usage results', rowCount: '{count} rows', period: 'Time period', tokens: 'Total token usage',
+    totalUsage: 'Total usage',
     pageSize: 'Per page', previous: 'Previous', next: 'Next',
     validation: { required: 'Select both the start and end.', invalid: 'Enter a valid date or month.', reversed: 'The start must not be after the end.' }
   },

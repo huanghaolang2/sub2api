@@ -35,6 +35,32 @@ describe('UsageBoardPanel', () => {
     api.adminKeys.mockResolvedValue([{ id: 11, name: '项目接口' }, { id: 12, name: '另一个接口' }])
     api.adminGroups.mockResolvedValue({ items: [{ id: 4, name: 'G1' }], total: 1 })
   })
+  it('shows the complete filtered token total before the row count, independent of pagination', async () => {
+    const response = boardResponse()
+    response.series[0].points[0].total_tokens = 80_000_000
+    response.series[0].points[1].total_tokens = 20_000_000
+    response.series.push({ api_key_id: 12, api_key_name: '另一个接口', points: response.series[0].points.map((point, index) => ({ ...point, total_tokens: index === 0 ? 20_000_000 : 0 })) })
+    response.rows = [{ ...response.rows[0], total_tokens: 80_000_000 }]
+    response.pagination = { page: 1, page_size: 1, total: 6, pages: 6 }
+    api.board.mockResolvedValue(response)
+    const wrapper = render(); await flushPromises()
+    expect(wrapper.get('[data-testid="board-total-tokens"]').text()).toBe('总用量：1.2 亿 Tokens')
+    const total = wrapper.get('[data-testid="board-total-tokens"]').element
+    const count = wrapper.get('[data-testid="board-row-count"]').element
+    expect(total.nextElementSibling).toBe(count)
+    expect(count.textContent).toBe('共 6 条')
+    await wrapper.get('[data-testid="board-token-sort"]').trigger('click'); await flushPromises()
+    expect(wrapper.get('[data-testid="board-total-tokens"]').text()).toBe('总用量：1.2 亿 Tokens')
+    const filtered = boardResponse()
+    filtered.series[0].points[0].total_tokens = 2_500_000
+    api.board.mockResolvedValueOnce(filtered)
+    await wrapper.get('[data-testid="board-granularity-month"]').trigger('click'); await flushPromises()
+    expect(wrapper.get('[data-testid="board-total-tokens"]').text()).toBe('总用量：2.5 百万 Tokens')
+    api.board.mockRejectedValueOnce(new Error('查询失败'))
+    await wrapper.get('[data-testid="board-token-sort"]').trigger('click'); await flushPromises()
+    expect(wrapper.find('[data-testid="board-total-tokens"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
   it('renders a real chart above the table and distinguishes observed zero from missing in both chart types', async () => {
     const wrapper = render(); await flushPromises()
     expect(wrapper.text()).toContain('数据来源：使用记录')

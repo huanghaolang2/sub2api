@@ -11,7 +11,7 @@ import UsageBoardMultiSelect from './UsageBoardMultiSelect.vue'
 
 const props = withDefaults(defineProps<{ scope?: UsageBoardScope }>(), { scope: UsageBoardScope.SELF })
 const { t } = useI18n()
-const { filters, selectedKeys, selectedGroups, chartType, sortOrder, pageSize, timezone, data, state, error, validation, lookups, reload, setGranularity, toggleSort, setPage, setPageSize, loadChoices, searchChoices } = useUsageBoard(props.scope)
+const { filters, selectedKeys, selectedGroups, chartType, sortOrder, pageSize, timezone, data, totalTokens, state, error, validation, lookups, reload, setGranularity, toggleSort, setPage, setPageSize, loadChoices, searchChoices } = useUsageBoard(props.scope)
 const granularities = [UsageBoardGranularity.DAY, UsageBoardGranularity.WEEK, UsageBoardGranularity.MONTH]
 const chartTypes = [UsageBoardChartType.LINE, UsageBoardChartType.BAR]
 const validationMessage = computed(() => validation.value === UsageBoardValidation.VALID ? '' : t(`usageBoard.validation.${validation.value}`))
@@ -46,7 +46,7 @@ const validationMessage = computed(() => validation.value === UsageBoardValidati
       <PageState :loading="state === UsageBoardLoadState.LOADING" :error="state === UsageBoardLoadState.ERROR ? error || t('usageBoard.failed') : ''" @retry="reload"><UsageBoardChart v-if="data" :data="data" :type="chartType" /></PageState>
     </div>
     <section v-if="data" class="board-results">
-      <header class="governance-card__header"><h3>{{ t('usageBoard.results') }}</h3><span class="board-meta">{{ t('usageBoard.rowCount', { count: data.pagination.total }) }}</span></header>
+      <header class="governance-card__header"><h3>{{ t('usageBoard.results') }}</h3><div class="board-summary board-meta"><span data-testid="board-total-tokens">{{ t('usageBoard.totalUsage') }}：{{ formatUsageBoardTokens(totalTokens) }} {{ usageBoardTokenUnit(totalTokens) }} Tokens</span><span data-testid="board-row-count">{{ t('usageBoard.rowCount', { count: data.pagination.total }) }}</span></div></header>
       <div class="resource-table board-table"><table data-testid="board-table"><thead><tr><th scope="col">{{ t('usageBoard.period') }}</th><th scope="col">{{ t('usageBoard.apiKey') }}</th><th scope="col" :aria-sort="sortOrder === UsageBoardSortOrder.DESC ? 'descending' : 'ascending'"><button type="button" data-testid="board-token-sort" @click="toggleSort">{{ t('usageBoard.tokens') }} <span aria-hidden="true">{{ sortOrder === UsageBoardSortOrder.DESC ? '↓' : '↑' }}</span></button></th></tr></thead><tbody><tr v-for="row in data.rows" :key="`${row.api_key_id ?? 'empty'}-${row.period_start}`" :data-state="row.data_state"><td>{{ row.period_label }} <span v-if="row.coverage === UsageBoardCoverage.PARTIAL" class="board-badge">{{ t('usageBoard.partial') }}</span></td><td>{{ row.api_key_name }}</td><td>{{ formatUsageBoardTokens(row.total_tokens) }} {{ usageBoardTokenUnit(row.total_tokens) }} Tokens<span v-if="row.data_state === UsageBoardDataState.MISSING" class="board-badge">{{ t('usageBoard.noData') }}</span></td></tr></tbody></table></div>
       <footer class="resource-pagination"><label class="board-page-size">{{ t('usageBoard.pageSize') }} <select :value="pageSize" @change="setPageSize(Number(($event.target as HTMLSelectElement).value))"><option v-for="size in [20, 50, 100]" :key="size" :value="size">{{ size }}</option></select></label><div class="resource-pagination__actions"><span>{{ data.pagination.page }} / {{ data.pagination.pages }}</span><AppButton variant="secondary" type="button" :disabled="data.pagination.page <= 1" @click="setPage(data.pagination.page - 1)">{{ t('usageBoard.previous') }}</AppButton><AppButton variant="secondary" type="button" :disabled="data.pagination.page >= data.pagination.pages" @click="setPage(data.pagination.page + 1)">{{ t('usageBoard.next') }}</AppButton></div></footer>
     </section>
@@ -57,6 +57,7 @@ const validationMessage = computed(() => validation.value === UsageBoardValidati
 .usage-board { display: grid; min-width: 0; gap: 20px; --board-bg: var(--surface-raised); --board-subtle: var(--surface-canvas); --board-border: var(--border-subtle); --board-text: var(--text-primary); --board-muted: var(--text-secondary); --board-accent: var(--accent); }
 .governance-card { min-width: 0; }
 .governance-card__header { flex-wrap: wrap; align-items: center; }
+.board-summary { display: flex; flex-wrap: wrap; gap: 4px 16px; font-variant-numeric: tabular-nums; }
 .board-meta { margin: 0; color: var(--text-secondary); font-size: var(--font-meta); }
 .board-field-label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: var(--font-body-sm); }
 .board-dates, .board-choices { max-width: 860px; }

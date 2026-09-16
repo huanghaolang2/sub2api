@@ -13,7 +13,7 @@ import UsageBoardMultiSelect from './UsageBoardMultiSelect.vue'
 
 const props = withDefaults(defineProps<{ scope?: UsageBoardScope }>(), { scope: UsageBoardScope.SELF })
 const { t } = useI18n()
-const { filters, selectedKeys, selectedGroups, chartType, sortOrder, pageSize, timezone, data, state, error, validation, lookups, reload, setGranularity, toggleSort, setPage, setPageSize, loadChoices, searchChoices } = useUsageBoard(props.scope)
+const { filters, selectedKeys, selectedGroups, chartType, sortOrder, pageSize, timezone, data, totalTokens, state, error, validation, lookups, reload, setGranularity, toggleSort, setPage, setPageSize, loadChoices, searchChoices } = useUsageBoard(props.scope)
 const granularities = [UsageBoardGranularity.DAY, UsageBoardGranularity.WEEK, UsageBoardGranularity.MONTH]
 const chartTypes = [UsageBoardChartType.LINE, UsageBoardChartType.BAR]
 const validationMessage = computed(() => validation.value === UsageBoardValidation.VALID ? '' : t(`usageBoard.validation.${validation.value}`))
@@ -75,10 +75,13 @@ function onSort(_key: string, order: 'asc' | 'desc'): void {
     </div>
 
     <div v-if="data" class="card overflow-hidden" data-testid="board-table">
-      <div class="card-header flex items-center justify-between gap-3">
+      <div class="card-header flex flex-wrap items-center justify-between gap-3">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-white">{{ t('usageBoard.results') }}</h3>
         <button type="button" class="btn btn-secondary btn-sm md:hidden" data-testid="board-token-sort-mobile" @click="toggleSort">{{ t('usageBoard.tokens') }} {{ sortOrder === UsageBoardSortOrder.DESC ? '↓' : '↑' }}</button>
-        <span class="hidden text-xs text-gray-500 dark:text-dark-400 md:inline">{{ t('usageBoard.rowCount', { count: data.pagination.total }) }}</span>
+        <div class="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-dark-400">
+          <span class="tabular-nums" data-testid="board-total-tokens">{{ t('usageBoard.totalUsage') }}：{{ formatUsageBoardTokens(totalTokens) }} {{ usageBoardTokenUnit(totalTokens) }} Tokens</span>
+          <span data-testid="board-row-count">{{ t('usageBoard.rowCount', { count: data.pagination.total }) }}</span>
+        </div>
       </div>
       <DataTable :columns="columns" :data="data.rows" :row-key="rowKey" :server-side-sort="true" default-sort-key="total_tokens" :default-sort-order="sortOrder" @sort="onSort">
         <template #header-total_tokens><button type="button" data-testid="board-token-sort">{{ t('usageBoard.tokens') }}</button></template>
