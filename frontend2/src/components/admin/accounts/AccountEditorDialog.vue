@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'; import type { Account, AccountPlatform, AccountType, AdminGroup, CreateAccountRequest, Proxy, UpdateAccountRequest } from '@/types'; import SurfaceDialog from '@/components/base/SurfaceDialog.vue'; import { DialogWidth } from '@/components/base/dialog'; import AccountCredentialWizard from './AccountCredentialWizard.vue'; import AccountPlatformConfigEditor from './AccountPlatformConfigEditor.vue'; import { AccountEditorTab, accountDraftToRequest, accountToDraft, emptyAccountDraft, type AccountDraft } from '@/features/admin/resources/account'; import { useAppStore } from '@/stores/app'
-enum AccountPlatformOption { OPENAI = 'openai', ANTHROPIC = 'anthropic', GEMINI = 'gemini', ANTIGRAVITY = 'antigravity', GROK = 'grok', KIMI = 'kimi', ZHIPU = 'zhipu', DEEPSEEK = 'deepseek' }
+enum AccountPlatformOption { OPENAI = 'openai', ANTHROPIC = 'anthropic', GEMINI = 'gemini', ANTIGRAVITY = 'antigravity', GROK = 'grok', KIMI = 'kimi', ZHIPU = 'zhipu', DEEPSEEK = 'deepseek', OPENCODE_GO = 'opencode_go' }
 enum AccountTypeOption { OAUTH = 'oauth', SETUP_TOKEN = 'setup-token', API_KEY = 'apikey', UPSTREAM = 'upstream', BEDROCK = 'bedrock', SERVICE_ACCOUNT = 'service_account' }
 const props = defineProps<{ show: boolean; account: Account | null; groups: AdminGroup[]; proxies: Proxy[]; submitting?: boolean }>(); const emit = defineEmits<{ close: []; submit: [payload: CreateAccountRequest | UpdateAccountRequest] }>(); const app = useAppStore(); const tab = ref(AccountEditorTab.BASIC); const form = reactive<AccountDraft>(emptyAccountDraft())
-const platforms: Array<{ value: AccountPlatform; label: string }> = [{ value: AccountPlatformOption.OPENAI, label: 'OpenAI / Codex' }, { value: AccountPlatformOption.ANTHROPIC, label: 'Anthropic / Claude' }, { value: AccountPlatformOption.GEMINI, label: 'Google Gemini' }, { value: AccountPlatformOption.ANTIGRAVITY, label: 'Antigravity' }, { value: AccountPlatformOption.GROK, label: 'Grok' }, { value: AccountPlatformOption.KIMI, label: 'Kimi' }, { value: AccountPlatformOption.ZHIPU, label: '智谱' }, { value: AccountPlatformOption.DEEPSEEK, label: 'DeepSeek' }]
+const platforms: Array<{ value: AccountPlatform; label: string }> = [{ value: AccountPlatformOption.OPENAI, label: 'OpenAI / Codex' }, { value: AccountPlatformOption.ANTHROPIC, label: 'Anthropic / Claude' }, { value: AccountPlatformOption.GEMINI, label: 'Google Gemini' }, { value: AccountPlatformOption.ANTIGRAVITY, label: 'Antigravity' }, { value: AccountPlatformOption.GROK, label: 'Grok' }, { value: AccountPlatformOption.KIMI, label: 'Kimi' }, { value: AccountPlatformOption.ZHIPU, label: '智谱' }, { value: AccountPlatformOption.DEEPSEEK, label: 'DeepSeek' }, { value: AccountPlatformOption.OPENCODE_GO, label: 'OpenCode' }]
 const typeLabels: Record<AccountType, string> = { [AccountTypeOption.OAUTH]: 'OAuth', [AccountTypeOption.SETUP_TOKEN]: 'Setup Token', [AccountTypeOption.API_KEY]: 'API Key', [AccountTypeOption.UPSTREAM]: '上游账号', [AccountTypeOption.BEDROCK]: 'Amazon Bedrock', [AccountTypeOption.SERVICE_ACCOUNT]: 'Service Account' }
 const platformTypes: Record<AccountPlatform, AccountType[]> = {
   [AccountPlatformOption.OPENAI]: [AccountTypeOption.OAUTH, AccountTypeOption.SETUP_TOKEN, AccountTypeOption.API_KEY],
@@ -14,6 +14,7 @@ const platformTypes: Record<AccountPlatform, AccountType[]> = {
   [AccountPlatformOption.KIMI]: [AccountTypeOption.API_KEY],
   [AccountPlatformOption.ZHIPU]: [AccountTypeOption.API_KEY],
   [AccountPlatformOption.DEEPSEEK]: [AccountTypeOption.API_KEY],
+  [AccountPlatformOption.OPENCODE_GO]: [AccountTypeOption.API_KEY],
   minimax: [AccountTypeOption.API_KEY]
 }
 const typeOptions = computed(() => platformTypes[form.platform].map(value => ({ value, label: typeLabels[value] })))
