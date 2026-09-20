@@ -31,8 +31,8 @@ function makeStats(over: Partial<UserStatsType> = {}): UserStatsType {
   }
 }
 
-function period(usage = 0) {
-  return { users: usage > 0 ? 1 : 0, usage, ranking: usage > 0 ? [{ name: '文案 A', usage }] : [], error: '' }
+function period(usage = 0, rangeLabel = '') {
+  return { users: usage > 0 ? 1 : 0, usage, ranking: usage > 0 ? [{ name: '文案 A', usage }] : [], error: '', rangeLabel }
 }
 function mountStats(periodStats = { today: period(), week: period(), month: period() }) {
   return mount(UserDashboardStats, { props: {
@@ -49,6 +49,26 @@ describe('UserDashboardStats release dashboard after upstream merge', () => {
     expect(rankings[0].get('li').text()).toContain('文案 A2.5 百万 Tokens')
     expect(rankings[1].get('li').text()).toContain('文案 A1.2 亿 Tokens')
     for (const removed of ['今日消费', '余额', '按平台拆分', '平均响应']) expect(wrapper.text()).not.toContain(removed)
+    wrapper.unmount()
+  })
+  it('shows the platform usage heading and dynamic period descriptions', () => {
+    const wrapper = mountStats({
+      today: period(1, '当天（2026-09-19）'),
+      week: period(2, '第38周（2026-09-14 到 2026-09-19）'),
+      month: period(3, '九月（2026-09-01 到 2026-09-30）'),
+    })
+    expect(wrapper.text()).toContain('平台功能使用情况')
+    expect(wrapper.text()).toContain('第38周（2026-09-14 到 2026-09-19）')
+    expect(wrapper.text()).toContain('九月（2026-09-01 到 2026-09-30）')
+    wrapper.unmount()
+  })
+  it('does not flash empty rankings while period data is loading', () => {
+    const wrapper = mount(UserDashboardStats, { props: {
+      stats: makeStats(), loading: false, periodLoading: true, error: '',
+      periodStats: { today: period(), week: period(), month: period() },
+    } })
+    expect(wrapper.findAll('.dashboard-ranking-card')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('暂无有效 Token 使用')
     wrapper.unmount()
   })
   it('keeps zero periods and empty rankings visible', () => {

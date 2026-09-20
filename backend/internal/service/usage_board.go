@@ -99,6 +99,7 @@ type UsageBoardResponse struct {
 	Timezone    string                `json:"timezone"`
 	StartDate   string                `json:"start_date"`
 	EndDate     string                `json:"end_date"`
+	TotalTokens int64                 `json:"total_tokens"`
 	Periods     []UsageBoardPeriod    `json:"periods"`
 	Series      []UsageBoardSeries    `json:"series"`
 	Rows        []UsageBoardRow       `json:"rows"`
@@ -280,6 +281,7 @@ func (s *UsageBoardService) Query(ctx context.Context, scope UsageBoardScope, us
 	cells := make(map[cellKey]UsageBoardAggregate, len(aggregates))
 	names := make(map[int64]string)
 	for _, a := range aggregates {
+		result.TotalTokens += a.TotalTokens
 		name := strings.TrimSpace(a.APIKeyName)
 		if name == "" {
 			name = fmt.Sprintf("API Key #%d", a.APIKeyID)

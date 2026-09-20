@@ -5,9 +5,11 @@ package repository
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
+	apperrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
@@ -54,9 +56,6 @@ func TestUsageBoardRecordsMatrixAndIsolation(t *testing.T) {
 		_, err := builder.Save(ctx)
 		require.NoError(t, err)
 	}
-	// Historical records remain available after a key is soft-deleted.
-	_, err = tx.ExecContext(ctx, "UPDATE api_keys SET deleted_at = NOW() WHERE id = $1", k1.ID)
-	require.NoError(t, err)
 	svc := service.NewUsageBoardService(&usageBoardRepository{sql: tx})
 	q := service.UsageBoardQuery{Granularity: service.UsageBoardDay, StartDate: "2026-09-07", EndDate: "2026-09-09", Timezone: "Asia/Taipei", APIKeyIDs: []int64{k1.ID, k2.ID, k3.ID}, GroupIDs: []int64{g1.ID}, PageSize: 2}
 	result, err := svc.Query(ctx, service.UsageBoardSelf, u1.ID, q)
@@ -74,6 +73,7 @@ func TestUsageBoardRecordsMatrixAndIsolation(t *testing.T) {
 		}
 	}
 	require.Equal(t, int64(170), sum)
+	require.Equal(t, int64(170), result.TotalTokens)
 	q.SortOrder = service.UsageBoardAsc
 	q.Page = 5
 	asc, err := svc.Query(ctx, service.UsageBoardSelf, u1.ID, q)
@@ -110,6 +110,54 @@ func TestUsageBoardRecordsMatrixAndIsolation(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestUsageBoardExcludesSoftDeletedAPIKeys(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	client := tx.Client()
+	user := mustCreateUser(t, client, &service.User{})
+	activeKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "board-active-key", Name: "active key"})
+	deletedKey := mustCreateApiKey(t, client, &service.APIKey{UserID: user.ID, Key: "board-deleted-key", Name: "deleted key"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "deleted key account"})
+	for _, input := range []struct {
+		key       int64
+		requestID string
+		tokens    int
+	}{
+		{activeKey.ID, "board-active-usage", 5},
+		{deletedKey.ID, "board-deleted-usage", 7},
+	} {
+		_, err := client.UsageLog.Create().
+			SetUserID(user.ID).
+			SetAPIKeyID(input.key).
+			SetAccountID(account.ID).
+			SetRequestID(input.requestID).
+			SetModel("test").
+			SetInputTokens(input.tokens).
+			SetCreatedAt(time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC)).
+			Save(ctx)
+		require.NoError(t, err)
+	}
+	_, err := tx.ExecContext(ctx, "UPDATE api_keys SET deleted_at = NOW() WHERE id = $1", deletedKey.ID)
+	require.NoError(t, err)
+
+	svc := service.NewUsageBoardService(&usageBoardRepository{sql: tx})
+	query := service.UsageBoardQuery{Granularity: service.UsageBoardDay, StartDate: "2026-09-12", EndDate: "2026-09-12", Timezone: "UTC"}
+	for _, scope := range []service.UsageBoardScope{service.UsageBoardSelf, service.UsageBoardAdmin} {
+		result, err := svc.Query(ctx, scope, user.ID, query)
+		require.NoError(t, err)
+		require.Equal(t, int64(5), result.TotalTokens)
+		require.Len(t, result.Series, 1)
+		require.NotNil(t, result.Series[0].APIKeyID)
+		require.Equal(t, activeKey.ID, *result.Series[0].APIKeyID)
+	}
+
+	query.APIKeyIDs = []int64{deletedKey.ID}
+	_, err = svc.Query(ctx, service.UsageBoardSelf, user.ID, query)
+	require.Equal(t, http.StatusForbidden, apperrors.Code(err))
+	_, err = svc.Query(ctx, service.UsageBoardAdmin, user.ID, query)
+	require.Equal(t, http.StatusBadRequest, apperrors.Code(err))
+}
+
 func TestUsageBoardDatabaseCalendarBoundaries(t *testing.T) {
 	ctx := context.Background()
 	tx := testEntTx(t)
@@ -140,4 +188,21 @@ func TestUsageBoardDatabaseCalendarBoundaries(t *testing.T) {
 			require.Equal(t, count, result.Series[0].Points[i].RecordCount)
 		}
 	}
+}
+
+func TestUsageBoardSelfScopeUsesAPIKeyOwner(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	client := tx.Client()
+	owner := mustCreateUser(t, client, &service.User{})
+	foreign := mustCreateUser(t, client, &service.User{})
+	key := mustCreateApiKey(t, client, &service.APIKey{UserID: owner.ID, Key: "board-owner-key", Name: "owner key"})
+	account := mustCreateAccount(t, client, &service.Account{Name: "owner account"})
+	_, err := client.UsageLog.Create().SetUserID(foreign.ID).SetAPIKeyID(key.ID).SetAccountID(account.ID).SetRequestID("board-owner-mismatch").SetModel("test").SetInputTokens(7).SetCreatedAt(time.Date(2026, 9, 12, 12, 0, 0, 0, time.UTC)).Save(ctx)
+	require.NoError(t, err)
+	svc := service.NewUsageBoardService(&usageBoardRepository{sql: tx})
+	result, err := svc.Query(ctx, service.UsageBoardSelf, owner.ID, service.UsageBoardQuery{Granularity: service.UsageBoardDay, StartDate: "2026-09-12", EndDate: "2026-09-12", Timezone: "UTC"})
+	require.NoError(t, err)
+	require.Len(t, result.Series, 1)
+	require.Equal(t, int64(7), result.Series[0].Points[0].TotalTokens)
 }

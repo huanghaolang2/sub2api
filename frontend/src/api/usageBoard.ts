@@ -47,6 +47,7 @@ export interface UsageBoardResponse {
   timezone: string
   start_date: string
   end_date: string
+  total_tokens?: number
   periods: UsageBoardPeriod[]
   series: UsageBoardSeries[]
   rows: UsageBoardRow[]

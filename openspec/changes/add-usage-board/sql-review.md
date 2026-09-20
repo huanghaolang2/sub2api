@@ -6,8 +6,8 @@
 
 ## 数据归属与变化范围
 
-- `usage_logs` 是唯一用量事实来源；使用记录自身的 `user_id` 用于权限隔离，`api_key_id` 用于统计，`group_id` 用于历史分组筛选。
-- `api_keys` 仅提供密钥名称和显式选中密钥的所属用户校验。密钥的当前分组不决定历史记录是否符合分组筛选。
+- `usage_logs` 是唯一用量事实来源；`api_key_id` 用于统计，`group_id` 用于历史分组筛选。个人范围通过当前未删除 API Key 的 `user_id` 隔离；`usage_logs.user_id` 可能是历史旧值，不用于放大个人可见范围。
+- `api_keys` 提供当前所属用户、密钥名称和显式选中密钥校验。已软删除或实体已不存在的密钥及其使用记录不纳入看板；密钥的当前分组不决定历史记录是否符合分组筛选。
 - 不查询或关联负责人、平台、上游账号；不使用 `actual_cost > 0`、tokens 大于 0 或计费类型条件排除匹配记录。
 - 本次无 DDL、DML、索引变更、迁移或回填，不修改字段类型、默认值、可空性及约束。新增查询只返回聚合数据和名称，不返回 `api_keys.key`。
 
@@ -20,10 +20,11 @@
 ```sql
 SELECT id, user_id
 FROM api_keys
-WHERE id = ANY($1::bigint[]);
+WHERE id = ANY($1::bigint[])
+  AND deleted_at IS NULL;
 ```
 
-对于个人范围，只有所有选中 ID 均存在且属于登录用户时才执行聚合，否则统一返回 403；不能去掉非法 ID 后继续查询。管理员选择不存在的 ID 返回 400。未显式选择时不执行这项查询。软删除但仍保存的密钥可以查询历史使用量；已经没有密钥实体的历史记录仍可在不显式筛选该密钥时纳入聚合并显示占位名称。
+对于个人范围，只有所有选中 ID 均存在、未软删除且属于登录用户时才执行聚合，否则统一返回 403；不能去掉非法 ID 后继续查询。管理员选择不存在或已软删除的 ID 返回 400。未显式选择时不执行这项查询。已软删除或已经没有密钥实体的历史记录不纳入聚合。
 
 聚合参数如下，全部使用绑定参数：
 
@@ -56,9 +57,12 @@ WITH aggregates AS (
             + ul.cache_read_tokens::bigint
         )::bigint AS total_tokens
     FROM usage_logs AS ul
+    JOIN api_keys AS key_scope
+      ON key_scope.id = ul.api_key_id
+     AND key_scope.deleted_at IS NULL
     WHERE ul.created_at >= $3::timestamptz
       AND ul.created_at < $4::timestamptz
-      AND ($5::bigint IS NULL OR ul.user_id = $5::bigint)
+      AND ($5::bigint IS NULL OR key_scope.user_id = $5::bigint)
       AND (cardinality($6::bigint[]) = 0 OR ul.api_key_id = ANY($6::bigint[]))
       AND (cardinality($7::bigint[]) = 0 OR ul.group_id = ANY($7::bigint[]))
     GROUP BY period_start, ul.api_key_id
@@ -68,6 +72,7 @@ WITH aggregates AS (
     SELECT k.id AS api_key_id
     FROM api_keys AS k
     WHERE k.id = ANY($6::bigint[])
+      AND k.deleted_at IS NULL
       AND ($5::bigint IS NULL OR k.user_id = $5::bigint)
 )
 SELECT
@@ -80,11 +85,12 @@ FROM key_dimensions AS d
 LEFT JOIN aggregates AS a ON a.api_key_id = d.api_key_id
 LEFT JOIN api_keys AS k
     ON k.id = d.api_key_id
+   AND k.deleted_at IS NULL
    AND ($5::bigint IS NULL OR k.user_id = $5::bigint)
 ORDER BY d.api_key_id ASC, a.period_start ASC NULLS FIRST;
 ```
 
-`api_keys.id` 为主键，聚合之后再关联名称，不产生一对多放大；不按名称合并不同密钥。不加软删除条件，以保留历史统计；名称实体不存在时，左连接保留已有使用记录。
+`api_keys.id` 为主键，关联不会产生一对多放大；不按名称合并不同密钥。聚合前通过当前未删除密钥限定数据范围，因此软删除或实体已不存在的密钥不会生成系列，也不计入总量。
 
 `group_id` 为 null 的记录在未选择分组时正常纳入，显式选择分组时不匹配。每次查询只应用所选日期范围，`date_trunc('week', ...)` 仅确定周一开始的桶，不扩大查询日期。
 
@@ -95,7 +101,7 @@ ORDER BY d.api_key_id ASC, a.period_start ASC NULLS FIRST;
 - 图表系列与表格行从同一矩阵产生。先得到完整图表，再对矩阵按 tokens 全局升序/降序及时间段、密钥 ID 稳定排序，最后按表格页码分页。查询不使用 Top N，也不在读取事实前分页。
 - 没有任何密钥维度时，由服务端生成 `api_key_id = null` 的全局缺失占位，供两种图表和表格展示；不能把 null 当作真实密钥 ID。
 - 图表和表格在一次响应中使用同一条 SQL 的读取视图。再次查询可能包含新到达的使用记录，这是新的结果，不拼接此前响应。
-- 密钥校验之后如果发生并发删除，实际聚合仍受使用记录用户范围及名称关联的用户范围约束；查询失败返回错误，不使用补零掩盖异常。
+- 密钥校验之后如果发生并发删除，聚合 SQL 在自身读取快照中只纳入未删除密钥；若删除在该快照后提交，则下一次查询起排除。查询失败返回错误，不使用补零掩盖异常。
 - 取消、超时、数值溢出和数据库错误通过现有错误通道返回；不允许截断或溢出回绕后当作成功数据。
 
 ## 可观察结果示例

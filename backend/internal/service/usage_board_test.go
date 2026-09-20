@@ -47,6 +47,7 @@ func TestUsageBoardMatrixSortingAndMissing(t *testing.T) {
 	require.Equal(t, int64(42), *r.filter.UserID)
 	require.Equal(t, 9, result.Pagination.Total)
 	require.Equal(t, []int64{120, 50}, []int64{result.Rows[0].TotalTokens, result.Rows[1].TotalTokens})
+	require.Equal(t, int64(170), result.TotalTokens)
 	require.Len(t, result.Series, 3)
 	require.Equal(t, "项目接口 (#1)", result.Series[0].APIKeyName)
 	require.Equal(t, "项目接口 (#2)", result.Series[1].APIKeyName)

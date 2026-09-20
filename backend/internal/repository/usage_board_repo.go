@@ -15,7 +15,7 @@ func NewUsageBoardRepository(db *sql.DB) service.UsageBoardRepository {
 }
 
 func (r *usageBoardRepository) KeyOwners(ctx context.Context, ids []int64) (owners map[int64]int64, err error) {
-	rows, err := r.sql.QueryContext(ctx, `SELECT id, user_id FROM api_keys WHERE id = ANY($1::bigint[])`, pq.Array(ids))
+	rows, err := r.sql.QueryContext(ctx, `SELECT id, user_id FROM api_keys WHERE id = ANY($1::bigint[]) AND deleted_at IS NULL`, pq.Array(ids))
 	if err != nil {
 		return nil, err
 	}
@@ -53,9 +53,14 @@ WITH aggregates AS (
             + ul.cache_read_tokens::bigint
         )::bigint AS total_tokens
     FROM usage_logs AS ul
+    -- API Key owner is the canonical user boundary; usage_logs.user_id can be
+    -- stale for historical records. Deleted keys are outside every board scope.
+    JOIN api_keys AS key_scope
+      ON key_scope.id = ul.api_key_id
+     AND key_scope.deleted_at IS NULL
     WHERE ul.created_at >= $3::timestamptz
       AND ul.created_at < $4::timestamptz
-      AND ($5::bigint IS NULL OR ul.user_id = $5::bigint)
+      AND ($5::bigint IS NULL OR key_scope.user_id = $5::bigint)
       AND (cardinality($6::bigint[]) = 0 OR ul.api_key_id = ANY($6::bigint[]))
       AND (cardinality($7::bigint[]) = 0 OR ul.group_id = ANY($7::bigint[]))
     GROUP BY period_start, ul.api_key_id
@@ -65,6 +70,7 @@ WITH aggregates AS (
     SELECT k.id AS api_key_id
     FROM api_keys AS k
     WHERE k.id = ANY($6::bigint[])
+      AND k.deleted_at IS NULL
       AND ($5::bigint IS NULL OR k.user_id = $5::bigint)
 )
 SELECT
@@ -77,6 +83,7 @@ FROM key_dimensions AS d
 LEFT JOIN aggregates AS a ON a.api_key_id = d.api_key_id
 LEFT JOIN api_keys AS k
     ON k.id = d.api_key_id
+   AND k.deleted_at IS NULL
    AND ($5::bigint IS NULL OR k.user_id = $5::bigint)
 ORDER BY d.api_key_id ASC, a.period_start ASC NULLS FIRST`
 	rows, err := r.sql.QueryContext(ctx, query, f.Granularity, f.Timezone, f.Start, f.End, f.UserID, pq.Array(f.APIKeyIDs), pq.Array(f.GroupIDs))

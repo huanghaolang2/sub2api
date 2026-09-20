@@ -1,18 +1,25 @@
 <template>
-  <section class="dashboard-user-stats" aria-label="文案用户用量统计">
-    <div v-if="props.loading" class="dashboard-period-grid">
+  <section class="dashboard-user-stats" aria-labelledby="dashboard-platform-usage-title">
+    <header class="dashboard-section-heading">
+      <div>
+        <h2 id="dashboard-platform-usage-title">平台功能使用情况</h2>
+        <p>按当前统计周期汇总使用人数与 Token 量。</p>
+      </div>
+    </header>
+    <div v-if="props.loading || props.periodLoading" class="dashboard-period-grid">
       <div v-for="index in 3" :key="index" class="card h-32 animate-pulse bg-gray-50 dark:bg-dark-800/40" />
     </div>
     <div v-else class="dashboard-period-grid">
       <article v-for="period in periods" :key="period.key" class="card dashboard-period-card">
         <header><span>{{ period.label }}</span><strong v-if="period.error" class="is-error">{{ period.error }}</strong></header>
+        <p class="dashboard-period-range">{{ period.rangeLabel }}</p>
         <div class="dashboard-period-facts">
           <div><small>使用人数</small><b>{{ period.users }}</b></div>
-          <div><small>使用量</small><b>{{ period.usage }} <em>百万 Tokens</em></b></div>
+          <div><small>使用量</small><b>{{ period.usage }}</b></div>
         </div>
       </article>
     </div>
-    <div class="dashboard-ranking-grid">
+    <div v-if="!props.loading && !props.periodLoading" class="dashboard-ranking-grid">
       <article v-for="ranking in rankings" :key="ranking.key" class="card dashboard-ranking-card">
         <header><h3>{{ ranking.label }}</h3><span>Top 3</span></header>
         <div v-if="ranking.error" class="dashboard-ranking-state is-error" role="alert">{{ ranking.error }}</div>
@@ -30,10 +37,9 @@
 import { computed } from 'vue'
 import type { UserDashboardStats } from '@/api/usage'
 import { formatUsageBoardTokens, usageBoardTokenUnit } from '@/utils/usageBoard'
+import type { DashboardPeriodStats } from './dashboardTrends'
 
-interface RankingItem { name: string; usage: number }
-interface PeriodStats { users: number; usage: number; ranking: RankingItem[]; error: string }
-const props = defineProps<{ stats: UserDashboardStats; loading: boolean; periodStats: { today: PeriodStats; week: PeriodStats; month: PeriodStats }; periodLoading: boolean; error: string }>()
+const props = defineProps<{ stats: UserDashboardStats; loading: boolean; periodStats: { today: DashboardPeriodStats; week: DashboardPeriodStats; month: DashboardPeriodStats }; periodLoading: boolean; error: string }>()
 const formatAmount = (value: number): string => `${formatUsageBoardTokens(value)} ${usageBoardTokenUnit(value)} Tokens`
 const periods = computed(() => [
   { key: 'today', label: '当天使用', ...props.periodStats.today, usage: formatAmount(props.periodStats.today.usage) },
@@ -48,14 +54,18 @@ const rankings = computed(() => [
 </script>
 
 <style scoped>
-.dashboard-user-stats { display: grid; gap: 16px; }
+.dashboard-user-stats { display: grid; gap: 12px; }
+.dashboard-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.dashboard-section-heading h2 { margin: 0; color: var(--text-primary); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
+.dashboard-section-heading p { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; }
 .dashboard-period-grid, .dashboard-ranking-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.dashboard-period-card { min-width: 0; padding: 18px; }
+.dashboard-period-card { min-width: 0; padding: 18px; box-shadow: none; }
 .dashboard-period-card > header, .dashboard-ranking-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .dashboard-period-card > header span, .dashboard-ranking-card h3 { color: var(--text-secondary); font-size: 13px; font-weight: 650; }
 .dashboard-period-card > header strong { color: var(--text-primary); font-size: 15px; }
 .dashboard-period-card > header strong.is-error { color: var(--danger); font-size: 12px; }
-.dashboard-period-facts { margin-top: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border-subtle); }
+.dashboard-period-range { min-height: 32px; margin: 5px 0 0; color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.45; overflow-wrap: anywhere; }
+.dashboard-period-facts { margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border-subtle); }
 .dashboard-period-facts div { padding: 10px; display: grid; gap: 4px; background: var(--surface-raised); }.dashboard-period-facts small { color: var(--text-secondary); font-size: 12px; }.dashboard-period-facts b { font-size: 22px; font-variant-numeric: tabular-nums; }.dashboard-period-facts em, .dashboard-ranking-card em { color: var(--text-secondary); font-size: 11px; font-style: normal; font-weight: 500; }
 .dashboard-ranking-card { min-width: 0; padding: 18px; }.dashboard-ranking-card > header span { color: var(--text-secondary); font-size: 11px; }.dashboard-ranking-card ol { margin: 14px 0 0; padding: 0; display: grid; gap: 9px; list-style: none; }.dashboard-ranking-card li { min-width: 0; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; }.dashboard-ranking-card li > span { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }.dashboard-ranking-card li strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.dashboard-ranking-card li b { font-size: 13px; font-variant-numeric: tabular-nums; }.dashboard-ranking-state { min-height: 52px; padding-top: 14px; color: var(--text-secondary); font-size: 12px; }.dashboard-ranking-state.is-error { color: var(--danger); }
 @media (max-width: 900px) { .dashboard-period-grid, .dashboard-ranking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

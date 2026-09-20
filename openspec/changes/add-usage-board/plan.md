@@ -18,7 +18,7 @@
 - **目标**：通过一个后端看板模块返回准确、可对账的图表系列与表格分页数据。
 - **范围**：新增 `backend/internal/service/usage_board.go`、`backend/internal/repository/usage_board_repo.go`；各自增加对应单元测试及 `usage_board_repo_integration_test.go`。定义粒度、数据状态、数据范围和排序方向的集中枚举；看板服务接收鉴权范围和查询参数，完成日期/月校验、时区与半开区间、周一分桶、所选密钥批量校验、全矩阵补零、名称去重展示、稳定排序和表格分页。仓储只实现已确认的两条读取查询，复用既有 `sqlExecutor` 和数据库连接，通过独立的小接口注入看板服务，不扩大已有 `UsageLogRepository` 接口及全部调用方。服务从同一批聚合结果构造完整图表及分页表格，保留零费用和零 tokens 记录。
 - **依赖**：已通过的 Spec 和 SQL 专项；Go 1.27.0、Docker 及既有集成测试设施。
-- **验收条件**：AC-002/003/004/005/006/007 中的时间、筛选、身份隔离、同名密钥、四项 tokens、零值、补零及分页行为通过；复现 SQL 审核样例总量 170，真实 0 的记录条数大于 0，缺失记录条数为 0。数据库测试还覆盖空分组、软删除密钥、跨年周、闰月及夏令时边界。排序先于分页，图表保持完整。
+- **验收条件**：AC-002/003/004/005/006/007 中的时间、筛选、身份隔离、同名密钥、四项 tokens、零值、补零及分页行为通过；复现 SQL 审核样例总量 170，真实 0 的记录条数大于 0，缺失记录条数为 0。数据库测试还覆盖空分组、排除软删除密钥、跨年周、闰月及夏令时边界。排序先于分页，图表保持完整。
 - **验证方式**：在 `backend` 执行 `go test -tags=unit ./internal/service -run '^TestUsageBoard' -count=1`；执行 `CI=1 SUB2API_TEST_POSTGRES_IMAGE=postgres:16-alpine go test -tags=integration ./internal/repository -run '^TestUsageBoard' -count=1 -v`，要求实际运行测试而非 skip。集成用例通过仓储及真实数据库记录验证结果，不用 SQL 字符串匹配代替聚合验收。
 - **状态**：已完成
 

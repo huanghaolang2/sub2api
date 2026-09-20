@@ -51,7 +51,7 @@
 | 验证对象 | 实际命令 | 结果 |
 | --- | --- | --- |
 | 服务逻辑 | `go test -tags=unit ./internal/service -run '^TestUsageBoard' -count=1` | 通过；完整矩阵、全局排序/分页、真假零值、跨年周、闰月、夏令时、非法参数、越权及失败处理 |
-| PostgreSQL 聚合 | `CI=1 SUB2API_TEST_POSTGRES_IMAGE=postgres:16-alpine go test -tags=integration ./internal/repository -run '^TestUsageBoard' -count=1 -v` | 两项集成测试实际执行通过，未跳过；审核样例总量 170，覆盖同名密钥、历史分组、软删除、空分组、权限和时间边界 |
+| PostgreSQL 聚合 | `CI=1 SUB2API_TEST_POSTGRES_IMAGE=postgres:16-alpine go test -tags=integration ./internal/repository -run '^TestUsageBoard' -count=1 -v` | 四项集成测试实际执行通过，未跳过；审核样例总量 170，覆盖同名密钥、历史分组、API Key 当前归属、排除软删除密钥、空分组、权限和时间边界 |
 | 处理器和真实认证路由 | `go test -tags=unit ./internal/handler ./internal/server/routes -run 'UsageBoard' -count=1` | 两个包通过；使用真实 JWT/Admin 中间件，验证 401/403、个人范围和管理范围；用户存储为测试替身 |
 | 依赖装配 | `go generate ./cmd/server` | Wire 生成成功，只增加看板依赖 |
 | 后端编译 | `go build -o /tmp/sub2api-usage-board-server ./cmd/server` | 通过；没有启动或替换现有服务 |

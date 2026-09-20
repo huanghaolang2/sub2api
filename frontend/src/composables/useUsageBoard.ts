@@ -17,7 +17,7 @@ export function useUsageBoard(scope: UsageBoardScope) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   const data = ref<UsageBoardResponse | null>(null)
   // Series contains the complete filtered result; rows contains only the current page.
-  const totalTokens = computed(() => data.value?.series.reduce((sum, series) =>
+  const totalTokens = computed(() => data.value?.total_tokens ?? data.value?.series.reduce((sum, series) =>
     sum + series.points.reduce((subtotal, point) => subtotal + point.total_tokens, 0), 0) ?? 0)
   const state = ref(UsageBoardLoadState.IDLE)
   const error = ref('')
