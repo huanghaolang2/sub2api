@@ -1,35 +1,38 @@
 <template>
-  <section class="dashboard-user-stats" aria-labelledby="dashboard-platform-usage-title">
+  <section class="dashboard-user-stats" aria-labelledby="dashboard-ranking-title">
     <header class="dashboard-section-heading">
       <div>
-        <h2 id="dashboard-platform-usage-title">平台功能使用情况</h2>
-        <p>按当前统计周期汇总使用人数与 Token 量。</p>
+        <h2 id="dashboard-ranking-title">Token 用量排行</h2>
+        <p>按当周、当月与所有时间对照 API Key 的 Token 使用量。</p>
       </div>
     </header>
-    <div v-if="props.loading || props.periodLoading" class="dashboard-period-grid">
-      <div v-for="index in 3" :key="index" class="card h-32 animate-pulse bg-gray-50 dark:bg-dark-800/40" />
-    </div>
-    <div v-else class="dashboard-period-grid">
-      <article v-for="period in periods" :key="period.key" class="card dashboard-period-card">
-        <header><span>{{ period.label }}</span><strong v-if="period.error" class="is-error">{{ period.error }}</strong></header>
-        <p class="dashboard-period-range">{{ period.rangeLabel }}</p>
-        <div class="dashboard-period-facts">
-          <div><small>使用人数</small><b>{{ period.users }}</b></div>
-          <div><small>使用量</small><b>{{ period.usage }}</b></div>
+
+    <div class="dashboard-ranking-grid">
+      <article v-for="period in periods" :key="period.key" class="dashboard-ranking-card">
+        <header>
+          <div>
+            <h3>{{ period.label }} Top 10</h3>
+            <p>{{ period.rangeLabel }}</p>
+          </div>
+          <span>Tokens</span>
+        </header>
+
+        <div v-if="period.loading" class="dashboard-ranking-loading" aria-label="排行加载中">
+          <i v-for="index in 5" :key="index" />
         </div>
-      </article>
-    </div>
-    <div v-if="!props.loading && !props.periodLoading" class="dashboard-ranking-grid">
-      <article v-for="ranking in rankings" :key="ranking.key" class="card dashboard-ranking-card">
-        <header><h3>{{ ranking.label }}</h3><span>Top 3</span></header>
-        <div v-if="ranking.error" class="dashboard-ranking-state is-error" role="alert">{{ ranking.error }}</div>
-        <div v-else-if="ranking.ranking.length === 0" class="dashboard-ranking-state">暂无有效 Token 使用</div>
+        <div v-else-if="period.error" class="dashboard-ranking-state is-error" role="alert">{{ period.error }}</div>
+        <div v-else-if="period.ranking.length === 0" class="dashboard-ranking-state">暂无有效 Token 使用</div>
         <ol v-else>
-          <li v-for="(item, index) in ranking.ranking" :key="`${item.name}-${index}`"><span>{{ index + 1 }}</span><strong :title="item.name">{{ item.name }}</strong><b>{{ formatUsageBoardTokens(item.usage) }} {{ usageBoardTokenUnit(item.usage) }} Tokens</b></li>
+          <li v-for="(item, index) in period.ranking.slice(0, 10)" :key="`${period.key}-${index}-${item.name}`">
+            <span>{{ index + 1 }}</span>
+            <strong :title="item.name">{{ item.name }}</strong>
+            <b>{{ formatAmount(item.usage) }}</b>
+          </li>
         </ol>
       </article>
     </div>
-    <p v-if="props.error" class="text-sm text-red-500" role="alert">{{ props.error }}</p>
+
+    <p v-if="props.error" class="dashboard-section-error" role="alert">{{ props.error }}</p>
   </section>
 </template>
 
@@ -39,35 +42,84 @@ import type { UserDashboardStats } from '@/api/usage'
 import { formatUsageBoardTokens, usageBoardTokenUnit } from '@/utils/usageBoard'
 import type { DashboardPeriodStats } from './dashboardTrends'
 
-const props = defineProps<{ stats: UserDashboardStats; loading: boolean; periodStats: { today: DashboardPeriodStats; week: DashboardPeriodStats; month: DashboardPeriodStats }; periodLoading: boolean; error: string }>()
+const props = defineProps<{
+  stats: UserDashboardStats
+  loading: boolean
+  periodStats: { week: DashboardPeriodStats; month: DashboardPeriodStats }
+  periodLoading: boolean
+  error: string
+}>()
+
 const formatAmount = (value: number): string => `${formatUsageBoardTokens(value)} ${usageBoardTokenUnit(value)} Tokens`
+
+const lifetime = computed<DashboardPeriodStats>(() => ({
+  users: props.stats.usage_board?.users ?? props.stats.total_api_keys,
+  usage: props.stats.usage_board?.total_tokens ?? props.stats.total_tokens,
+  ranking: (props.stats.usage_board?.ranking ?? []).map((item) => ({
+    name: item.api_key_name,
+    usage: item.total_tokens,
+  })),
+  error: '',
+  rangeLabel: '所有时间',
+}))
+
 const periods = computed(() => [
-  { key: 'today', label: '当天使用', ...props.periodStats.today, usage: formatAmount(props.periodStats.today.usage) },
-  { key: 'week', label: '当周使用', ...props.periodStats.week, usage: formatAmount(props.periodStats.week.usage) },
-  { key: 'month', label: '当月使用', ...props.periodStats.month, usage: formatAmount(props.periodStats.month.usage) }
-])
-const rankings = computed(() => [
-  { key: 'today', label: '当天 Top 3', ...props.periodStats.today },
-  { key: 'week', label: '当周 Top 3', ...props.periodStats.week },
-  { key: 'month', label: '当月 Top 3', ...props.periodStats.month }
+  { key: 'week', label: '当周使用', ...props.periodStats.week, loading: props.loading || props.periodLoading },
+  { key: 'month', label: '当月使用', ...props.periodStats.month, loading: props.loading || props.periodLoading },
+  { key: 'lifetime', label: '累计看板', ...lifetime.value, loading: props.loading },
 ])
 </script>
 
 <style scoped>
-.dashboard-user-stats { display: grid; gap: 12px; }
-.dashboard-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
-.dashboard-section-heading h2 { margin: 0; color: var(--text-primary); font-size: 16px; font-weight: 700; letter-spacing: -.02em; }
-.dashboard-section-heading p { margin: 3px 0 0; color: var(--text-secondary); font-size: 12px; }
-.dashboard-period-grid, .dashboard-ranking-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.dashboard-period-card { min-width: 0; padding: 18px; box-shadow: none; }
-.dashboard-period-card > header, .dashboard-ranking-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.dashboard-period-card > header span, .dashboard-ranking-card h3 { color: var(--text-secondary); font-size: 13px; font-weight: 650; }
-.dashboard-period-card > header strong { color: var(--text-primary); font-size: 15px; }
-.dashboard-period-card > header strong.is-error { color: var(--danger); font-size: 12px; }
-.dashboard-period-range { min-height: 32px; margin: 5px 0 0; color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; line-height: 1.45; overflow-wrap: anywhere; }
-.dashboard-period-facts { margin-top: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border-subtle); }
-.dashboard-period-facts div { padding: 10px; display: grid; gap: 4px; background: var(--surface-raised); }.dashboard-period-facts small { color: var(--text-secondary); font-size: 12px; }.dashboard-period-facts b { font-size: 22px; font-variant-numeric: tabular-nums; }.dashboard-period-facts em, .dashboard-ranking-card em { color: var(--text-secondary); font-size: 11px; font-style: normal; font-weight: 500; }
-.dashboard-ranking-card { min-width: 0; padding: 18px; }.dashboard-ranking-card > header span { color: var(--text-secondary); font-size: 11px; }.dashboard-ranking-card ol { margin: 14px 0 0; padding: 0; display: grid; gap: 9px; list-style: none; }.dashboard-ranking-card li { min-width: 0; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; }.dashboard-ranking-card li > span { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }.dashboard-ranking-card li strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.dashboard-ranking-card li b { font-size: 13px; font-variant-numeric: tabular-nums; }.dashboard-ranking-state { min-height: 52px; padding-top: 14px; color: var(--text-secondary); font-size: 12px; }.dashboard-ranking-state.is-error { color: var(--danger); }
-@media (max-width: 900px) { .dashboard-period-grid, .dashboard-ranking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .dashboard-period-grid, .dashboard-ranking-grid { grid-template-columns: 1fr; } }
+.dashboard-user-stats {
+  --dashboard-surface: #ffffff;
+  --dashboard-surface-soft: #f7f9fc;
+  --dashboard-ink: #172033;
+  --dashboard-muted: #64748b;
+  --dashboard-border: #dbe4f0;
+  display: grid;
+  gap: 16px;
+  color: var(--dashboard-ink);
+}
+:global(.dark .dashboard-user-stats) {
+  --dashboard-surface: #151a24;
+  --dashboard-surface-soft: #1d2430;
+  --dashboard-ink: #f8fafc;
+  --dashboard-muted: #94a3b8;
+  --dashboard-border: #334155;
+}
+.dashboard-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 20px; }
+.dashboard-section-heading h2 { margin: 0; color: var(--dashboard-ink); font-size: clamp(22px, 2vw, 28px); font-weight: 760; letter-spacing: -.035em; }
+.dashboard-section-heading p { max-width: 620px; margin: 6px 0 0; color: var(--dashboard-muted); font-size: 13px; line-height: 1.6; }
+.dashboard-ranking-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 16px; }
+.dashboard-ranking-card { min-width: 0; padding: 20px; background: var(--dashboard-surface); border: 1px solid var(--dashboard-border); border-radius: 18px; box-shadow: 0 14px 36px rgb(15 23 42 / 6%); }
+:global(.dark .dashboard-ranking-card) { box-shadow: 0 20px 56px rgb(0 0 0 / 22%); }
+.dashboard-ranking-card > header { min-height: 46px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.dashboard-ranking-card h3 { margin: 0; color: var(--dashboard-ink); font-size: 14px; font-weight: 720; }
+.dashboard-ranking-card header p { margin: 4px 0 0; color: var(--dashboard-muted); font-size: 10px; font-variant-numeric: tabular-nums; line-height: 1.45; }
+.dashboard-ranking-card > header > span { flex: 0 0 auto; color: var(--dashboard-muted); font-size: 10px; font-weight: 650; }
+.dashboard-ranking-card ol { margin: 14px 0 0; padding: 0; display: grid; gap: 5px; list-style: none; }
+.dashboard-ranking-card li { min-width: 0; min-height: 36px; padding: 6px 8px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 8px; border-radius: 8px; }
+.dashboard-ranking-card li:nth-child(odd) { background: var(--dashboard-surface-soft); }
+.dashboard-ranking-card li > span { color: var(--dashboard-muted); font-size: 10px; font-variant-numeric: tabular-nums; text-align: center; }
+.dashboard-ranking-card li > strong { overflow: hidden; color: var(--dashboard-ink); font-size: 12px; font-weight: 660; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-ranking-card li > b { color: var(--dashboard-ink); font-size: 10px; font-weight: 680; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dashboard-ranking-state { min-height: 300px; display: grid; place-items: center; color: var(--dashboard-muted); font-size: 12px; text-align: center; }
+.dashboard-ranking-state.is-error, .dashboard-section-error { color: #dc2626; }
+:global(.dark .dashboard-ranking-state.is-error), :global(.dark .dashboard-section-error) { color: #f87171; }
+.dashboard-ranking-loading { margin-top: 14px; display: grid; gap: 7px; }
+.dashboard-ranking-loading i { height: 36px; display: block; background: var(--dashboard-surface-soft); border-radius: 8px; animation: dashboard-ranking-pulse 1.2s ease-in-out infinite; }
+@keyframes dashboard-ranking-pulse { 50% { opacity: .45; } }
+@media (max-width: 900px) {
+  .dashboard-ranking-grid { grid-template-columns: 1fr; }
+  .dashboard-ranking-card ol { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 18px; }
+  .dashboard-ranking-state { min-height: 100px; }
+}
+@media (max-width: 520px) {
+  .dashboard-ranking-card { padding: 18px; }
+  .dashboard-ranking-card ol { grid-template-columns: 1fr; }
+  .dashboard-ranking-card li { grid-template-columns: 20px minmax(0, 1fr); }
+  .dashboard-ranking-card li > b { grid-column: 2; color: var(--dashboard-muted); font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .dashboard-ranking-loading i { animation: none; } }
 </style>

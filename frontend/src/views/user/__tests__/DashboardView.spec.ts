@@ -18,15 +18,14 @@ vi.mock('@/api/usageBoard', async () => ({
 
 function board(granularity: UsageBoardGranularity) {
   const monthly = granularity === UsageBoardGranularity.MONTH
-  const daily = granularity === UsageBoardGranularity.DAY
-  const start = monthly ? '2026-09-01' : daily ? '2026-09-19' : '2026-09-14'
+  const start = monthly ? '2026-09-01' : '2026-09-14'
   const end = monthly ? '2026-09-30' : '2026-09-19'
   return {
     granularity,
     timezone: 'Asia/Taipei',
     start_date: start,
     end_date: end,
-    periods: [{ start, end: monthly ? end : daily ? end : '2026-09-20', label: start, coverage: daily || monthly ? UsageBoardCoverage.FULL : UsageBoardCoverage.PARTIAL }],
+    periods: [{ start, end: monthly ? end : '2026-09-20', label: start, coverage: monthly ? UsageBoardCoverage.FULL : UsageBoardCoverage.PARTIAL }],
     series: [{
       api_key_id: 1,
       api_key_name: '文案 A',
@@ -43,21 +42,24 @@ describe('user dashboard', () => {
     vi.setSystemTime(new Date(2026, 8, 19, 15, 0))
     vi.clearAllMocks()
     auth.refreshUser.mockResolvedValue(undefined)
-    api.getDashboardStats.mockResolvedValue({ total_api_keys: 1 })
+    api.getDashboardStats.mockResolvedValue({
+      total_api_keys: 1,
+      usage_board: { users: 1, total_tokens: 120, ranking: [{ api_key_id: 1, api_key_name: '文案 A', total_tokens: 120 }] },
+    })
     api.getUsageBoard.mockImplementation((_scope, query) => Promise.resolve(board(query.granularity)))
   })
 
   afterEach(() => { vi.useRealTimers() })
 
-  it('replaces quick actions with weekly and monthly trends and dynamic period labels', async () => {
+  it('loads week and month trends plus the cumulative summary without a today query', async () => {
     const wrapper = mount(DashboardView, {
       global: {
         stubs: {
           AppLayout: { template: '<main><slot /></main>' },
           LoadingSpinner: true,
           UserDashboardStats: {
-            props: ['periodStats'],
-            template: '<section class="stats">{{ periodStats.week.rangeLabel }} {{ periodStats.month.rangeLabel }}</section>'
+            props: ['periodStats', 'stats'],
+            template: '<section class="stats">{{ periodStats.week.rangeLabel }} {{ periodStats.month.rangeLabel }} 累计 {{ stats.usage_board.users }}</section>',
           },
           UserDashboardTrends: {
             props: ['trends'],
@@ -73,13 +75,15 @@ describe('user dashboard', () => {
     expect(wrapper.text()).toContain('月看板趋势 1')
     expect(wrapper.text()).toContain('第38周（2026-09-14 到 2026-09-19）')
     expect(wrapper.text()).toContain('九月（2026-09-01 到 2026-09-30）')
-    expect(api.getUsageBoard).toHaveBeenCalledTimes(3)
+    expect(wrapper.text()).toContain('累计 1')
+    expect(api.getUsageBoard).toHaveBeenCalledTimes(2)
     expect(api.getUsageBoard).toHaveBeenCalledWith('self', expect.objectContaining({
-      granularity: 'week', start_date: '2026-08-10', end_date: '2026-09-19'
+      granularity: 'week', start_date: '2026-08-24', end_date: '2026-09-19'
     }))
     expect(api.getUsageBoard).toHaveBeenCalledWith('self', expect.objectContaining({
-      granularity: 'month', start_month: '2026-04', end_month: '2026-09'
+      granularity: 'month', start_month: '2026-07', end_month: '2026-09'
     }))
+    expect(api.getUsageBoard).not.toHaveBeenCalledWith('self', expect.objectContaining({ granularity: 'day' }))
     wrapper.unmount()
   })
 })

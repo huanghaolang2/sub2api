@@ -893,6 +893,50 @@ func (s *UsageLogRepoSuite) TestGetUserDashboardStats() {
 	s.Require().NoError(err, "GetUserDashboardStats")
 	s.Require().Equal(int64(1), stats.TotalAPIKeys)
 	s.Require().Equal(int64(1), stats.TotalRequests)
+	s.Require().NotNil(stats.UsageBoard)
+	s.Require().Equal(int64(1), stats.UsageBoard.Users)
+	s.Require().Equal(int64(30), stats.UsageBoard.TotalTokens)
+	s.Require().Equal([]usagestats.UserDashboardUsageRanking{{APIKeyID: apiKey.ID, APIKeyName: "k", TotalTokens: 30}}, stats.UsageBoard.Ranking)
+}
+
+func (s *UsageLogRepoSuite) TestGetUserDashboardStatsUsageBoardTopTen() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "userdash-top@test.com"})
+	foreign := mustCreateUser(s.T(), s.client, &service.User{Email: "userdash-foreign@test.com"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-userdash-top"})
+	keys := make([]*service.APIKey, 0, 11)
+	for index := 1; index <= 11; index++ {
+		name := fmt.Sprintf("key %02d", index)
+		if index <= 2 {
+			name = "shared"
+		}
+		key := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: fmt.Sprintf("sk-userdash-top-%02d", index), Name: name})
+		keys = append(keys, key)
+		s.createUsageLog(user, key, account, index, 0, 0, time.Now())
+	}
+	zeroKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-userdash-zero", Name: "zero"})
+	s.createUsageLog(user, zeroKey, account, 0, 0, 0, time.Now())
+	deletedKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-userdash-deleted", Name: "deleted"})
+	s.createUsageLog(user, deletedKey, account, 1_000, 0, 0, time.Now())
+	_, err := s.tx.ExecContext(s.ctx, "UPDATE api_keys SET deleted_at = NOW() WHERE id = $1", deletedKey.ID)
+	s.Require().NoError(err)
+	foreignKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: foreign.ID, Key: "sk-userdash-foreign", Name: "foreign"})
+	s.createUsageLog(foreign, foreignKey, account, 2_000, 0, 0, time.Now())
+
+	stats, err := s.repo.GetUserDashboardStats(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().NotNil(stats.UsageBoard)
+	s.Require().Equal(int64(11), stats.UsageBoard.Users)
+	s.Require().Equal(int64(66), stats.UsageBoard.TotalTokens)
+	s.Require().Len(stats.UsageBoard.Ranking, 10)
+	s.Require().Equal(keys[10].ID, stats.UsageBoard.Ranking[0].APIKeyID)
+	s.Require().Equal(int64(11), stats.UsageBoard.Ranking[0].TotalTokens)
+	s.Require().Equal(keys[1].ID, stats.UsageBoard.Ranking[9].APIKeyID)
+	s.Require().Equal(fmt.Sprintf("shared (#%d)", keys[1].ID), stats.UsageBoard.Ranking[9].APIKeyName)
+	for _, item := range stats.UsageBoard.Ranking {
+		s.Require().NotEqual(zeroKey.ID, item.APIKeyID)
+		s.Require().NotEqual(deletedKey.ID, item.APIKeyID)
+		s.Require().NotEqual(foreignKey.ID, item.APIKeyID)
+	}
 }
 
 // --- GetAccountTodayStats ---

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import UserDashboardStats from '../UserDashboardStats.vue'
 import type { UserDashboardStats as UserStatsType } from '@/api/usage'
@@ -15,6 +15,7 @@ function makeStats(over: Partial<UserStatsType> = {}): UserStatsType {
     total_tokens: 0,
     total_cost: 0,
     total_actual_cost: 0,
+    usage_board: { users: 0, total_tokens: 0, ranking: [] },
     today_requests: 0,
     today_input_tokens: 0,
     today_output_tokens: 0,
@@ -31,57 +32,105 @@ function makeStats(over: Partial<UserStatsType> = {}): UserStatsType {
   }
 }
 
-function period(usage = 0, rangeLabel = '') {
-  return { users: usage > 0 ? 1 : 0, usage, ranking: usage > 0 ? [{ name: '文案 A', usage }] : [], error: '', rangeLabel }
+function ranking(count: number, start = count) {
+  return Array.from({ length: count }, (_, index) => ({ name: `文案 ${index + 1}`, usage: start - index }))
 }
-function mountStats(periodStats = { today: period(), week: period(), month: period() }) {
+
+function period(usage = 0, rangeLabel = '', rankingCount = usage > 0 ? 1 : 0) {
+  return { users: usage > 0 ? Math.max(1, rankingCount) : 0, usage, ranking: ranking(rankingCount, usage), error: '', rangeLabel }
+}
+
+function mountStats(options: {
+  stats?: UserStatsType
+  periodStats?: { week: ReturnType<typeof period>; month: ReturnType<typeof period> }
+  periodLoading?: boolean
+} = {}) {
   return mount(UserDashboardStats, { props: {
-    stats: makeStats(), loading: false, periodLoading: false, error: '', periodStats,
+    stats: options.stats ?? makeStats(),
+    loading: false,
+    periodLoading: options.periodLoading ?? false,
+    error: '',
+    periodStats: options.periodStats ?? { week: period(), month: period() },
   } })
 }
 
-describe('UserDashboardStats release dashboard after upstream merge', () => {
-  it('retains paired period metrics and all three rankings without reintroducing platform or spending cards', () => {
-    const wrapper = mountStats({ today: period(2_500_000), week: period(120_000_000), month: period(250_000_000) })
-    expect(wrapper.findAll('.dashboard-period-card')).toHaveLength(3)
-    const rankings = wrapper.findAll('.dashboard-ranking-card')
-    expect(rankings.map((card) => card.get('h3').text())).toEqual(['当天 Top 3', '当周 Top 3', '当月 Top 3'])
-    expect(rankings[0].get('li').text()).toContain('文案 A2.5 百万 Tokens')
-    expect(rankings[1].get('li').text()).toContain('文案 A1.2 亿 Tokens')
-    for (const removed of ['今日消费', '余额', '按平台拆分', '平均响应']) expect(wrapper.text()).not.toContain(removed)
-    wrapper.unmount()
-  })
-  it('shows the platform usage heading and dynamic period descriptions', () => {
+describe('UserDashboardStats', () => {
+  it('shows week, month, and lifetime Top 10 cards in one ranking grid', () => {
     const wrapper = mountStats({
-      today: period(1, '当天（2026-09-19）'),
-      week: period(2, '第38周（2026-09-14 到 2026-09-19）'),
-      month: period(3, '九月（2026-09-01 到 2026-09-30）'),
+      periodStats: {
+        week: period(120, '第38周（2026-09-14 到 2026-09-19）'),
+        month: period(240, '九月（2026-09-01 到 2026-09-30）'),
+      },
     })
-    expect(wrapper.text()).toContain('平台功能使用情况')
+    expect(wrapper.get('#dashboard-ranking-title').text()).toBe('Token 用量排行')
+    expect(wrapper.find('.dashboard-period-board').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('当天使用')
     expect(wrapper.text()).toContain('第38周（2026-09-14 到 2026-09-19）')
-    expect(wrapper.text()).toContain('九月（2026-09-01 到 2026-09-30）')
+    expect(wrapper.text()).toContain('所有时间')
+    expect(wrapper.get('.dashboard-ranking-grid').findAll('h3').map((heading) => heading.text())).toEqual([
+      '当周使用 Top 10',
+      '当月使用 Top 10',
+      '累计看板 Top 10',
+    ])
     wrapper.unmount()
   })
-  it('does not flash empty rankings while period data is loading', () => {
-    const wrapper = mount(UserDashboardStats, { props: {
-      stats: makeStats(), loading: false, periodLoading: true, error: '',
-      periodStats: { today: period(), week: period(), month: period() },
-    } })
-    expect(wrapper.findAll('.dashboard-ranking-card')).toHaveLength(0)
+
+  it('removes the summary metric boards and keeps cumulative ranking data', () => {
+    const wrapper = mountStats({
+      stats: makeStats({
+        usage_board: {
+          users: 12,
+          total_tokens: 987_000_000,
+          ranking: [{ api_key_id: 1, api_key_name: '累计文案', total_tokens: 987_000_000 }],
+        },
+      }),
+      periodStats: { week: period(2_500_000), month: period(120_000_000) },
+    })
+    expect(wrapper.find('.dashboard-period-metric').exists()).toBe(false)
+    expect(wrapper.findAll('.dashboard-ranking-card')).toHaveLength(3)
+    expect(wrapper.findAll('.dashboard-ranking-card')[2].text()).toContain('累计文案')
+    expect(wrapper.findAll('.dashboard-ranking-card')[2].text()).toContain('9.87 亿 Tokens')
+    wrapper.unmount()
+  })
+
+  it('renders at most ten ranked API keys for every board', () => {
+    const cumulativeRanking = Array.from({ length: 10 }, (_, index) => ({
+      api_key_id: index + 1,
+      api_key_name: `累计 ${index + 1}`,
+      total_tokens: 100 - index,
+    }))
+    const wrapper = mountStats({
+      stats: makeStats({ usage_board: { users: 10, total_tokens: 955, ranking: cumulativeRanking } }),
+      periodStats: { week: period(200, '本周', 12), month: period(100, '本月', 10) },
+    })
+    const rankings = wrapper.findAll('.dashboard-ranking-card')
+    expect(rankings).toHaveLength(3)
+    expect(rankings.every((board) => board.text().includes('Top 10'))).toBe(true)
+    expect(rankings[0].findAll('li')).toHaveLength(10)
+    expect(rankings[1].findAll('li')).toHaveLength(10)
+    expect(rankings[2].findAll('li')).toHaveLength(10)
+    expect(rankings[2].text()).toContain('累计 10')
+    wrapper.unmount()
+  })
+
+  it('keeps the lifetime board available while week and month data load', () => {
+    const wrapper = mountStats({
+      stats: makeStats({ usage_board: { users: 1, total_tokens: 20, ranking: [{ api_key_id: 1, api_key_name: '累计文案', total_tokens: 20 }] } }),
+      periodLoading: true,
+    })
+    expect(wrapper.findAll('.dashboard-ranking-card')).toHaveLength(3)
+    expect(wrapper.findAll('.dashboard-ranking-loading')).toHaveLength(2)
+    expect(wrapper.text()).toContain('累计文案')
     expect(wrapper.text()).not.toContain('暂无有效 Token 使用')
     wrapper.unmount()
   })
-  it('keeps zero periods and empty rankings visible', () => {
-    const wrapper = mountStats()
-    expect(wrapper.findAll('.dashboard-period-card')).toHaveLength(3)
+
+  it('keeps zero boards and independent period failures explicit', () => {
+    const failed = { ...period(), error: '周统计查询失败' }
+    const wrapper = mountStats({ periodStats: { week: failed, month: period() } })
+    expect(wrapper.get('[role="alert"]').text()).toBe('周统计查询失败')
     expect(wrapper.findAll('.dashboard-ranking-state')).toHaveLength(3)
     expect(wrapper.findAll('.dashboard-ranking-card li')).toHaveLength(0)
-    wrapper.unmount()
-  })
-  it('preserves period failure messages instead of inventing ranking entries', () => {
-    const failed = { ...period(), error: '查询失败' }
-    const wrapper = mountStats({ today: failed, week: period(), month: period() })
-    expect(wrapper.get('.dashboard-ranking-card [role="alert"]').text()).toBe('查询失败')
     wrapper.unmount()
   })
 })

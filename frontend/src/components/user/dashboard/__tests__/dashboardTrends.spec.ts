@@ -50,10 +50,10 @@ function response(overrides: Partial<UsageBoardResponse> = {}): UsageBoardRespon
 }
 
 describe('dashboard trend helpers', () => {
-  it('creates six-period ranges aligned to the current week and month', () => {
+  it('creates four-week and three-month ranges aligned to the current period', () => {
     const now = new Date(2026, 8, 19, 15, 30)
-    expect(dashboardTrendRange('week', now)).toEqual({ startDate: '2026-08-10', endDate: '2026-09-19' })
-    expect(dashboardTrendRange('month', now)).toEqual({ startMonth: '2026-04', endMonth: '2026-09' })
+    expect(dashboardTrendRange('week', now)).toEqual({ startDate: '2026-08-24', endDate: '2026-09-19' })
+    expect(dashboardTrendRange('month', now)).toEqual({ startMonth: '2026-07', endMonth: '2026-09' })
   })
 
   it('summarizes the latest period rather than the full trend range', () => {
@@ -64,6 +64,24 @@ describe('dashboard trend helpers', () => {
       { name: '文案 A', usage: 300 },
       { name: '文案 B', usage: 100 }
     ])
+  })
+
+  it('keeps the ten highest API keys in a period ranking', () => {
+    const data = response({
+      series: Array.from({ length: 12 }, (_, index) => ({
+        api_key_id: index + 1,
+        api_key_name: `文案 ${index + 1}`,
+        points: [
+          { period_start: '2026-08-31', total_tokens: 0, record_count: 0, data_state: UsageBoardDataState.MISSING },
+          { period_start: '2026-09-07', total_tokens: 0, record_count: 0, data_state: UsageBoardDataState.MISSING },
+          { period_start: '2026-09-14', total_tokens: index + 1, record_count: 1, data_state: UsageBoardDataState.OBSERVED },
+        ],
+      })),
+    })
+    const summary = summarizeUsageBoardPeriod(data)
+    expect(summary.ranking).toHaveLength(10)
+    expect(summary.ranking[0]).toEqual({ name: '文案 12', usage: 12 })
+    expect(summary.ranking[9]).toEqual({ name: '文案 3', usage: 3 })
   })
 
   it('builds week labels and clips the current period to the actual query end', () => {
@@ -78,7 +96,7 @@ describe('dashboard trend helpers', () => {
 
   it('handles calendar-year boundaries for ranges and ISO week names', () => {
     const now = new Date(2026, 0, 3, 12, 0)
-    expect(dashboardTrendRange('month', now)).toEqual({ startMonth: '2025-08', endMonth: '2026-01' })
+    expect(dashboardTrendRange('month', now)).toEqual({ startMonth: '2025-11', endMonth: '2026-01' })
 
     const data = response({
       start_date: '2025-12-29',

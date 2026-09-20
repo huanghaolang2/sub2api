@@ -219,6 +219,20 @@ type APIKeyDailyUsagePoint struct {
 	ActualCost       float64 `json:"actual_cost"` // 实际扣除
 }
 
+// UserDashboardUsageRanking represents one API Key in the cumulative usage ranking.
+type UserDashboardUsageRanking struct {
+	APIKeyID    int64  `json:"api_key_id"`
+	APIKeyName  string `json:"api_key_name"`
+	TotalTokens int64  `json:"total_tokens"`
+}
+
+// UserDashboardUsageBoard summarizes all-time usage for non-deleted API Keys.
+type UserDashboardUsageBoard struct {
+	Users       int64                       `json:"users"`
+	TotalTokens int64                       `json:"total_tokens"`
+	Ranking     []UserDashboardUsageRanking `json:"ranking"`
+}
+
 // UserDashboardStats 用户仪表盘统计
 type UserDashboardStats struct {
 	// API Key 统计
@@ -226,14 +240,15 @@ type UserDashboardStats struct {
 	ActiveAPIKeys int64 `json:"active_api_keys"`
 
 	// 累计 Token 使用统计
-	TotalRequests            int64   `json:"total_requests"`
-	TotalInputTokens         int64   `json:"total_input_tokens"`
-	TotalOutputTokens        int64   `json:"total_output_tokens"`
-	TotalCacheCreationTokens int64   `json:"total_cache_creation_tokens"`
-	TotalCacheReadTokens     int64   `json:"total_cache_read_tokens"`
-	TotalTokens              int64   `json:"total_tokens"`
-	TotalCost                float64 `json:"total_cost"`        // 累计标准计费
-	TotalActualCost          float64 `json:"total_actual_cost"` // 累计实际扣除
+	TotalRequests            int64                    `json:"total_requests"`
+	TotalInputTokens         int64                    `json:"total_input_tokens"`
+	TotalOutputTokens        int64                    `json:"total_output_tokens"`
+	TotalCacheCreationTokens int64                    `json:"total_cache_creation_tokens"`
+	TotalCacheReadTokens     int64                    `json:"total_cache_read_tokens"`
+	TotalTokens              int64                    `json:"total_tokens"`
+	TotalCost                float64                  `json:"total_cost"`        // 累计标准计费
+	TotalActualCost          float64                  `json:"total_actual_cost"` // 累计实际扣除
+	UsageBoard               *UserDashboardUsageBoard `json:"usage_board,omitempty"`
 
 	// 今日 Token 使用统计
 	TodayRequests            int64   `json:"today_requests"`

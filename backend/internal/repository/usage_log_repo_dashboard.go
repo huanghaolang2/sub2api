@@ -377,6 +377,71 @@ type UserDashboardStats = usagestats.UserDashboardStats
 // PlatformDashboardStats 单平台用量明细
 type PlatformDashboardStats = usagestats.PlatformDashboardStats
 
+func (r *usageLogRepository) fillUserDashboardUsageBoard(ctx context.Context, stats *UserDashboardStats, userID int64) error {
+	const query = `
+		WITH per_key AS (
+			SELECT
+				k.id AS api_key_id,
+				COALESCE(NULLIF(BTRIM(k.name), ''), 'API Key #' || k.id::text) AS api_key_name,
+				SUM(
+					ul.input_tokens::bigint
+					+ ul.output_tokens::bigint
+					+ ul.cache_creation_tokens::bigint
+					+ ul.cache_read_tokens::bigint
+				)::bigint AS total_tokens
+			FROM usage_logs AS ul
+			JOIN api_keys AS k
+			  ON k.id = ul.api_key_id
+			 AND k.deleted_at IS NULL
+			WHERE k.user_id = $1
+			GROUP BY k.id, k.name
+		), ranked AS (
+			SELECT
+				api_key_id,
+				api_key_name,
+				total_tokens,
+				COUNT(*) OVER () AS total_users,
+				(SUM(total_tokens) OVER ())::bigint AS all_tokens,
+				COUNT(*) OVER (PARTITION BY api_key_name) AS name_count
+			FROM per_key
+			WHERE total_tokens > 0
+		)
+		SELECT
+			api_key_id,
+			CASE
+				WHEN name_count > 1 THEN api_key_name || ' (#' || api_key_id::text || ')'
+				ELSE api_key_name
+			END AS api_key_name,
+			total_tokens,
+			total_users,
+			all_tokens
+		FROM ranked
+		ORDER BY total_tokens DESC, api_key_id ASC
+		LIMIT 10`
+
+	summary := &usagestats.UserDashboardUsageBoard{Ranking: make([]usagestats.UserDashboardUsageRanking, 0, 10)}
+	rows, err := r.sql.QueryContext(ctx, query, userID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var item usagestats.UserDashboardUsageRanking
+		if err := rows.Scan(&item.APIKeyID, &item.APIKeyName, &item.TotalTokens, &summary.Users, &summary.TotalTokens); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		summary.Ranking = append(summary.Ranking, item)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	stats.UsageBoard = summary
+	return nil
+}
+
 // GetUserDashboardStats 获取用户专属的仪表盘统计
 func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID int64) (*UserDashboardStats, error) {
 	stats := &UserDashboardStats{}
@@ -399,6 +464,10 @@ func (r *usageLogRepository) GetUserDashboardStats(ctx context.Context, userID i
 		[]any{userID, service.StatusActive},
 		&stats.ActiveAPIKeys,
 	); err != nil {
+		return nil, err
+	}
+
+	if err := r.fillUserDashboardUsageBoard(ctx, stats, userID); err != nil {
 		return nil, err
 	}
 

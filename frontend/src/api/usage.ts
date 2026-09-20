@@ -30,6 +30,18 @@ export interface PlatformDashboardStats {
   today_actual_cost: number
 }
 
+export interface UserDashboardUsageRanking {
+  api_key_id: number
+  api_key_name: string
+  total_tokens: number
+}
+
+export interface UserDashboardUsageBoard {
+  users: number
+  total_tokens: number
+  ranking: UserDashboardUsageRanking[]
+}
+
 export interface UserDashboardStats {
   total_api_keys: number
   active_api_keys: number
@@ -41,6 +53,7 @@ export interface UserDashboardStats {
   total_tokens: number
   total_cost: number // 标准计费
   total_actual_cost: number // 实际扣除
+  usage_board?: UserDashboardUsageBoard
   today_requests: number
   today_input_tokens: number
   today_output_tokens: number

@@ -57,7 +57,7 @@ function clippedEnd(periodEnd: string, responseEnd: string): string {
   return periodEnd > responseEnd ? responseEnd : periodEnd
 }
 
-export function dashboardTrendRange(kind: DashboardTrendKind, now: Date = new Date(), periodCount = 6): {
+export function dashboardTrendRange(kind: DashboardTrendKind, now: Date = new Date(), periodCount = kind === 'week' ? 4 : 3): {
   startDate?: string
   endDate?: string
   startMonth?: string
@@ -88,7 +88,7 @@ export function summarizeUsageBoardPeriod(result: UsageBoardResponse, periodInde
   return {
     users: values.filter((item) => item.usage > 0).length,
     usage: values.reduce((sum, item) => sum + item.usage, 0),
-    ranking: values.filter((item) => item.usage > 0).sort((left, right) => right.usage - left.usage).slice(0, 3),
+    ranking: values.filter((item) => item.usage > 0).sort((left, right) => right.usage - left.usage).slice(0, 10),
     error: '',
     rangeLabel: period ? `${period.start} 到 ${clippedEnd(period.end, result.end_date)}` : `${result.start_date} 到 ${result.end_date}`
   }

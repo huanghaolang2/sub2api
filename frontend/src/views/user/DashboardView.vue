@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="space-y-8 pb-10">
       <div v-if="loading" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
       <div v-else-if="statsError" class="py-12 text-center text-sm text-red-500" role="alert">{{ statsError }}</div>
       <template v-else-if="stats">
@@ -34,7 +34,6 @@ import {
   type DashboardPeriodStats,
   type DashboardTrendSeries
 } from '@/components/user/dashboard/dashboardTrends'
-import { formatDateLocalInput } from '@/utils/format'
 
 const authStore = useAuthStore()
 const stats = ref<UserStatsType | null>(null)
@@ -44,14 +43,13 @@ const statsError = ref('')
 
 const emptyPeriod = (error = ''): DashboardPeriodStats => ({ users: 0, usage: 0, ranking: [], error, rangeLabel: '' })
 const emptyTrend = (error = ''): DashboardTrendSeries => ({ points: [], error })
-const periodStats = ref({ today: emptyPeriod(), week: emptyPeriod(), month: emptyPeriod() })
+const periodStats = ref({ week: emptyPeriod(), month: emptyPeriod() })
 const trends = ref({ week: emptyTrend(), month: emptyTrend() })
 
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 const today = () => new Date()
-const dateValue = (value: Date) => formatDateLocalInput(value)
 
-function boardQuery(kind: 'today' | 'week' | 'month'): UsageBoardQuery {
+function boardQuery(kind: 'week' | 'month'): UsageBoardQuery {
   const base = {
     timezone,
     api_key_ids: [],
@@ -59,10 +57,6 @@ function boardQuery(kind: 'today' | 'week' | 'month'): UsageBoardQuery {
     sort_order: UsageBoardSortOrder.DESC,
     page: 1,
     page_size: 1000
-  }
-  if (kind === 'today') {
-    const date = dateValue(today())
-    return { ...base, granularity: UsageBoardGranularity.DAY, start_date: date, end_date: date }
   }
   if (kind === 'week') {
     const range = dashboardTrendRange('week', today())
@@ -89,7 +83,7 @@ async function loadStats() {
 
 async function loadPeriodStats() {
   periodLoading.value = true
-  const kinds = ['today', 'week', 'month'] as const
+  const kinds = ['week', 'month'] as const
   const results = await Promise.allSettled(kinds.map((kind) => getUsageBoard(UsageBoardScope.SELF, boardQuery(kind))))
 
   for (const [index, kind] of kinds.entries()) {
@@ -99,13 +93,13 @@ async function loadPeriodStats() {
         ...summarizeUsageBoardPeriod(result.value),
         rangeLabel: dashboardPeriodLabel(kind, result.value)
       }
-      if (kind !== 'today') trends.value[kind] = buildDashboardTrend(result.value, kind)
+      trends.value[kind] = buildDashboardTrend(result.value, kind)
       continue
     }
 
     const error = result.reason instanceof Error ? result.reason.message : '统计加载失败'
     periodStats.value[kind] = emptyPeriod(error)
-    if (kind !== 'today') trends.value[kind] = emptyTrend(error)
+    trends.value[kind] = emptyTrend(error)
   }
   periodLoading.value = false
 }
