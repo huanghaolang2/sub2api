@@ -71,6 +71,7 @@ describe('user dashboard', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('快捷操作')
+    expect(wrapper.get('.trends').element.nextElementSibling).toBe(wrapper.get('.stats').element)
     expect(wrapper.text()).toContain('周看板趋势 1')
     expect(wrapper.text()).toContain('月看板趋势 1')
     expect(wrapper.text()).toContain('第38周（2026-09-14 到 2026-09-19）')

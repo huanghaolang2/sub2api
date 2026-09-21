@@ -31,11 +31,33 @@ describe('UserDashboardTrends', () => {
 
     expect(wrapper.findAll('.dashboard-trend-card')).toHaveLength(2)
     expect(wrapper.findAll('.dashboard-trend-metric')).toHaveLength(4)
+    expect(wrapper.findAll('.dashboard-trend-y-axis')).toHaveLength(4)
+    expect(wrapper.findAll('.dashboard-trend-y-axis')[0].text()).toContain('人数')
+    expect(wrapper.findAll('.dashboard-trend-y-axis')[0].findAll('span').map((tick) => tick.text())).toEqual(['4', '2', '0'])
+    expect(wrapper.findAll('.dashboard-trend-y-axis')[1].text()).toContain('Tokens')
+    expect(wrapper.findAll('.dashboard-trend-y-axis')[1].findAll('span').map((tick) => tick.text())).toEqual(['5百万', '2.5百万', '0'])
     expect(wrapper.text()).toContain('最近 4 个自然周')
     expect(wrapper.text()).toContain('最近 3 个自然月')
     expect(wrapper.text()).toContain('4 人')
     expect(wrapper.text()).toContain('较首期 +3')
     expect(wrapper.text()).toContain('较首期 −2 百万')
+    const metrics = wrapper.findAll('.dashboard-trend-metric')
+    const weeklyPositions = metrics[0].findAll('.dashboard-trend-hit').map((point) => {
+      const style = point.attributes('style')
+      return {
+        x: parseFloat(style.match(/left: ([\d.]+)%/)?.[1] ?? '0'),
+        y: parseFloat(style.match(/top: ([\d.]+)%/)?.[1] ?? '0'),
+      }
+    })
+    expect(weeklyPositions).toEqual([
+      { x: 12.5, y: expect.closeTo(66.67, 2) },
+      { x: 37.5, y: 50 },
+      { x: 62.5, y: expect.closeTo(33.33, 2) },
+      { x: 87.5, y: expect.closeTo(16.67, 2) },
+    ])
+    const monthlyPointPositions = metrics[2].findAll('.dashboard-trend-hit').map((point) => parseFloat(point.attributes('style').match(/left: ([\d.]+)%/)?.[1] ?? '0'))
+    expect(monthlyPointPositions).toEqual([expect.closeTo(16.67, 2), 50, expect.closeTo(83.33, 2)])
+    expect(metrics[0].get('.dashboard-trend-plot polyline').attributes('points')).toMatch(/^12\.50,/)
     for (const chart of wrapper.findAll('.dashboard-trend-plot polyline')) {
       expect(chart.attributes('points')).not.toMatch(/NaN|Infinity/)
     }

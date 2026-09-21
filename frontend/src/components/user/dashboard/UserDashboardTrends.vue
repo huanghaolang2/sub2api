@@ -37,69 +37,88 @@
             </header>
 
             <div class="dashboard-trend-figure">
-              <div class="dashboard-trend-plot-frame" @mouseleave="clearHover(board.key, metric.key)">
-                <svg
-                  class="dashboard-trend-plot"
-                  viewBox="0 0 100 48"
-                  preserveAspectRatio="none"
-                  role="img"
-                  :aria-label="`${board.title}${metric.label}趋势：${metric.description}`"
-                >
-                  <line class="grid-line" x1="0" y1="8" x2="100" y2="8" />
-                  <line class="grid-line" x1="0" y1="24" x2="100" y2="24" />
-                  <line class="grid-line" x1="0" y1="40" x2="100" y2="40" />
-                  <line
-                    v-if="hoveredPoint(board.key, metric)"
-                    class="crosshair"
-                    :x1="hoveredPoint(board.key, metric)?.x"
-                    y1="5"
-                    :x2="hoveredPoint(board.key, metric)?.x"
-                    y2="43"
-                  />
-                  <polyline :points="metric.line" />
-                </svg>
-
-                <button
-                  v-for="mark in metric.marks"
-                  :key="mark.point.key"
-                  type="button"
-                  class="dashboard-trend-hit"
-                  :class="{ 'is-active': isHovered(board.key, metric.key, mark.index) }"
-                  :style="markStyle(mark)"
-                  :aria-label="mark.ariaLabel"
-                  @mouseenter="activatePoint(board.key, metric.key, mark.index)"
-                  @focus="activatePoint(board.key, metric.key, mark.index)"
-                  @click="activatePoint(board.key, metric.key, mark.index)"
-                  @blur="clearHover(board.key, metric.key)"
-                >
-                  <span />
-                </button>
-
-                <div
-                  v-if="hoveredPoint(board.key, metric)"
-                  class="dashboard-trend-tooltip"
-                  :class="tooltipAlignment(hoveredPoint(board.key, metric)?.x ?? 50)"
-                  :style="{ left: `${hoveredPoint(board.key, metric)?.x ?? 50}%` }"
-                  role="status"
-                >
-                  <strong>{{ hoveredPoint(board.key, metric)?.formatted }}</strong>
-                  <span>{{ metric.label }} · {{ hoveredPoint(board.key, metric)?.point.label }}</span>
-                  <time>{{ hoveredPoint(board.key, metric)?.point.start }} 至 {{ hoveredPoint(board.key, metric)?.point.end }}</time>
+              <div class="dashboard-trend-chart">
+                <div class="dashboard-trend-y-axis" aria-hidden="true">
+                  <small>{{ metric.axisLabel }}</small>
+                  <span
+                    v-for="tick in metric.ticks"
+                    :key="`${metric.key}-${tick.y}`"
+                    :style="{ top: `${tick.y / 48 * 100}%` }"
+                  >{{ tick.label }}</span>
                 </div>
-              </div>
 
-              <div
-                class="dashboard-trend-labels"
-                :style="{ gridTemplateColumns: `repeat(${Math.max(board.points.length, 1)}, minmax(0, 1fr))` }"
-              >
-                <span
-                  v-for="(point, pointIndex) in board.points"
-                  :key="point.key"
-                  :class="{ 'is-first': pointIndex === 0, 'is-last': pointIndex === board.points.length - 1 }"
-                  :data-range="`${point.start} 至 ${point.end}`"
-                  :aria-label="`${point.label}，${point.start} 至 ${point.end}`"
-                  tabindex="0"
-                >{{ point.label }}</span>
+                <div class="dashboard-trend-plot-column">
+                  <div class="dashboard-trend-plot-frame" @mouseleave="clearHover(board.key, metric.key)">
+                    <svg
+                      class="dashboard-trend-plot"
+                      viewBox="0 0 100 48"
+                      preserveAspectRatio="none"
+                      role="img"
+                      :aria-label="`${board.title}${metric.label}趋势：${metric.description}`"
+                    >
+                      <line
+                        v-for="tick in metric.ticks"
+                        :key="`grid-${metric.key}-${tick.y}`"
+                        class="grid-line"
+                        x1="0"
+                        :y1="tick.y"
+                        x2="100"
+                        :y2="tick.y"
+                      />
+                      <line
+                        v-if="hoveredPoint(board.key, metric)"
+                        class="crosshair"
+                        :x1="hoveredPoint(board.key, metric)?.x"
+                        y1="5"
+                        :x2="hoveredPoint(board.key, metric)?.x"
+                        y2="43"
+                      />
+                      <polyline :points="metric.line" />
+                    </svg>
+
+                    <button
+                      v-for="mark in metric.marks"
+                      :key="mark.point.key"
+                      type="button"
+                      class="dashboard-trend-hit"
+                      :class="{ 'is-active': isHovered(board.key, metric.key, mark.index) }"
+                      :style="markStyle(mark)"
+                      :aria-label="mark.ariaLabel"
+                      @mouseenter="activatePoint(board.key, metric.key, mark.index)"
+                      @focus="activatePoint(board.key, metric.key, mark.index)"
+                      @click="activatePoint(board.key, metric.key, mark.index)"
+                      @blur="clearHover(board.key, metric.key)"
+                    >
+                      <span />
+                    </button>
+
+                    <div
+                      v-if="hoveredPoint(board.key, metric)"
+                      class="dashboard-trend-tooltip"
+                      :class="tooltipAlignment(hoveredPoint(board.key, metric)?.x ?? 50)"
+                      :style="{ left: `${hoveredPoint(board.key, metric)?.x ?? 50}%` }"
+                      role="status"
+                    >
+                      <strong>{{ hoveredPoint(board.key, metric)?.formatted }}</strong>
+                      <span>{{ metric.label }} · {{ hoveredPoint(board.key, metric)?.point.label }}</span>
+                      <time>{{ hoveredPoint(board.key, metric)?.point.start }} 至 {{ hoveredPoint(board.key, metric)?.point.end }}</time>
+                    </div>
+                  </div>
+
+                  <div
+                    class="dashboard-trend-labels"
+                    :style="{ gridTemplateColumns: `repeat(${Math.max(board.points.length, 1)}, minmax(0, 1fr))` }"
+                  >
+                    <span
+                      v-for="(point, pointIndex) in board.points"
+                      :key="point.key"
+                      :class="{ 'is-first': pointIndex === 0, 'is-last': pointIndex === board.points.length - 1 }"
+                      :data-range="`${point.start} 至 ${point.end}`"
+                      :aria-label="`${point.label}，${point.start} 至 ${point.end}`"
+                      tabindex="0"
+                    >{{ point.label }}</span>
+                  </div>
+                </div>
               </div>
 
               <table class="sr-only">
@@ -136,15 +155,22 @@ interface PlotMark {
   point: DashboardTrendPoint
 }
 
+interface AxisTick {
+  y: number
+  label: string
+}
+
 interface TrendMetric {
   key: MetricKey
   label: string
+  axisLabel: string
   latest: string
   delta: string
   direction: string
   line: string
   description: string
   marks: PlotMark[]
+  ticks: AxisTick[]
 }
 
 const props = defineProps<{
@@ -155,17 +181,36 @@ const props = defineProps<{
 const hover = ref<{ boardKey: string; metricKey: MetricKey; index: number } | null>(null)
 const hasData = computed(() => props.trends.week.points.length > 0 || props.trends.month.points.length > 0)
 
-function plot(values: number[]): { line: string; marks: Array<{ index: number; x: number; y: number }> } {
-  if (values.length === 0) return { line: '', marks: [] }
-  const minimum = Math.min(...values)
-  const maximum = Math.max(...values)
-  const span = maximum - minimum
-  const marks = values.map((value, index) => {
-    const x = values.length === 1 ? 50 : index * 100 / (values.length - 1)
-    const y = span === 0 ? 24 : 40 - ((value - minimum) / span) * 32
-    return { index, x, y }
-  })
-  return { line: marks.map((mark) => `${mark.x.toFixed(2)},${mark.y.toFixed(2)}`).join(' '), marks }
+function tokenScaleMaximum(value: number): number {
+  if (value <= 0) return 1_000_000
+  const magnitude = 10 ** Math.floor(Math.log10(value))
+  const normalized = value / magnitude
+  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+  return step * magnitude
+}
+
+function plot(values: number[], key: MetricKey): {
+  line: string
+  marks: Array<{ index: number; x: number; y: number }>
+  ticks: Array<{ y: number; value: number }>
+} {
+  if (values.length === 0) return { line: '', marks: [], ticks: [] }
+  const maximum = Math.max(...values, 0)
+  const scaleMaximum = key === 'users'
+    ? Math.max(2, Math.ceil(maximum / 2) * 2)
+    : tokenScaleMaximum(maximum)
+  const y = (value: number): number => 40 - (Math.max(value, 0) / scaleMaximum) * 32
+  const marks = values.map((value, index) => ({
+    index,
+    x: (index + 0.5) * 100 / values.length,
+    y: y(value),
+  }))
+  const tickValues = [scaleMaximum, scaleMaximum / 2, 0]
+  return {
+    line: marks.map((mark) => `${mark.x.toFixed(2)},${mark.y.toFixed(2)}`).join(' '),
+    marks,
+    ticks: tickValues.map((value) => ({ y: y(value), value })),
+  }
 }
 
 function signed(value: number, formatter: (amount: number) => string): string {
@@ -188,8 +233,11 @@ function metric(points: DashboardTrendPoint[], key: MetricKey): TrendMetric {
   const latest = values[values.length - 1] ?? 0
   const difference = latest - first
   const formatter = key === 'users' ? (value: number) => value.toLocaleString('zh-CN') : tokenAmount
+  const axisFormatter = key === 'users'
+    ? (value: number) => value.toLocaleString('zh-CN')
+    : (value: number) => value === 0 ? '0' : `${formatUsageBoardTokens(value)}${usageBoardTokenUnit(value)}`
   const label = key === 'users' ? '使用人数' : 'Token 使用量'
-  const geometry = plot(values)
+  const geometry = plot(values, key)
   const marks = geometry.marks.map((mark) => {
     const point = points[mark.index]
     const formatted = key === 'users' ? `${formatter(values[mark.index])} 人` : `${formatter(values[mark.index])} Tokens`
@@ -204,12 +252,14 @@ function metric(points: DashboardTrendPoint[], key: MetricKey): TrendMetric {
   return {
     key,
     label,
+    axisLabel: key === 'users' ? '人数' : 'Tokens',
     latest: key === 'users' ? `${formatter(latest)} 人` : `${formatter(latest)} Tokens`,
     delta: signed(difference, formatter),
     direction: direction(difference),
     line: geometry.line,
     description: points.map((point, index) => `${point.label}（${point.start} 至 ${point.end}）${formatter(values[index])}`).join('，'),
     marks,
+    ticks: geometry.ticks.map((tick) => ({ y: tick.y, label: axisFormatter(tick.value) })),
   }
 }
 
@@ -285,15 +335,20 @@ function tooltipAlignment(x: number): string {
 .dashboard-trend-card__header p { margin: 5px 0 0; color: var(--dashboard-muted); font-size: 12px; }
 .dashboard-trend-card__header > span { color: var(--dashboard-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dashboard-trend-metrics { margin-top: 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.dashboard-trend-metric { min-width: 0; padding: 21px; background: var(--dashboard-surface-soft); border: 1px solid var(--dashboard-border); border-radius: 16px; }
+.dashboard-trend-metric { --dashboard-plot-height: 150px; min-width: 0; padding: 21px; background: var(--dashboard-surface-soft); border: 1px solid var(--dashboard-border); border-radius: 16px; }
 .dashboard-trend-metric__summary { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .dashboard-trend-metric__summary > div { min-width: 0; display: grid; gap: 7px; }
 .dashboard-trend-metric__summary span { color: var(--dashboard-muted); font-size: 12px; font-weight: 680; }
 .dashboard-trend-metric__summary strong { color: var(--dashboard-ink); font-size: clamp(23px, 2.3vw, 32px); font-weight: 750; letter-spacing: -.035em; line-height: 1.05; overflow-wrap: anywhere; }
 .dashboard-trend-metric__summary > small { flex: 0 0 auto; color: var(--dashboard-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .dashboard-trend-metric__summary > small.is-up, .dashboard-trend-metric__summary > small.is-down { color: var(--dashboard-accent); }
-.dashboard-trend-figure { margin-top: 16px; }
-.dashboard-trend-plot-frame { position: relative; height: 150px; }
+.dashboard-trend-figure { margin-top: 18px; }
+.dashboard-trend-chart { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; }
+.dashboard-trend-y-axis { position: relative; height: var(--dashboard-plot-height); color: var(--dashboard-muted); font-size: 9px; font-variant-numeric: tabular-nums; }
+.dashboard-trend-y-axis small { position: absolute; top: -17px; right: 0; font-size: 9px; font-weight: 650; }
+.dashboard-trend-y-axis > span { position: absolute; right: 0; transform: translateY(-50%); white-space: nowrap; }
+.dashboard-trend-plot-column { min-width: 0; }
+.dashboard-trend-plot-frame { position: relative; height: var(--dashboard-plot-height); }
 .dashboard-trend-plot { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
 .dashboard-trend-plot .grid-line { stroke: var(--dashboard-border); stroke-width: .55; vector-effect: non-scaling-stroke; }
 .dashboard-trend-plot .crosshair { stroke: var(--dashboard-muted); stroke-width: .8; vector-effect: non-scaling-stroke; }
@@ -333,9 +388,9 @@ function tooltipAlignment(x: number): string {
   .dashboard-trend-card { padding: 18px; border-radius: 18px; }
   .dashboard-trend-card__header { display: grid; gap: 6px; }
   .dashboard-trend-card__header > span { white-space: normal; }
-  .dashboard-trend-metric { padding: 17px; }
+  .dashboard-trend-metric { --dashboard-plot-height: 138px; padding: 17px; }
   .dashboard-trend-metric__summary { align-items: flex-start; flex-direction: column; }
-  .dashboard-trend-plot-frame { height: 138px; }
+  .dashboard-trend-chart { grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dashboard-trend-card.is-loading > span, .dashboard-trend-card.is-loading > strong, .dashboard-trend-card.is-loading i { animation: none; }

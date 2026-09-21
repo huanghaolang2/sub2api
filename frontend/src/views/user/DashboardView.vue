@@ -4,6 +4,7 @@
       <div v-if="loading" class="flex items-center justify-center py-12"><LoadingSpinner /></div>
       <div v-else-if="statsError" class="py-12 text-center text-sm text-red-500" role="alert">{{ statsError }}</div>
       <template v-else-if="stats">
+        <UserDashboardTrends :trends="trends" :loading="periodLoading" />
         <UserDashboardStats
           :stats="stats"
           :loading="loading"
@@ -11,7 +12,6 @@
           :period-loading="periodLoading"
           :error="statsError"
         />
-        <UserDashboardTrends :trends="trends" :loading="periodLoading" />
       </template>
     </div>
   </AppLayout>
