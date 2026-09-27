@@ -11,7 +11,7 @@
       <article v-for="period in periods" :key="period.key" class="dashboard-ranking-card">
         <header>
           <div>
-            <h3>{{ period.label }} Top 10</h3>
+            <h3>{{ period.label }} Top</h3>
             <p>{{ period.rangeLabel }}</p>
           </div>
           <span>Tokens</span>
@@ -21,9 +21,9 @@
           <i v-for="index in 5" :key="index" />
         </div>
         <div v-else-if="period.error" class="dashboard-ranking-state is-error" role="alert">{{ period.error }}</div>
-        <div v-else-if="period.ranking.length === 0" class="dashboard-ranking-state">暂无有效 Token 使用</div>
+        <div v-else-if="period.ranking.length === 0" class="dashboard-ranking-state">暂无 API Key</div>
         <ol v-else>
-          <li v-for="(item, index) in period.ranking.slice(0, 10)" :key="`${period.key}-${index}-${item.name}`">
+          <li v-for="(item, index) in period.ranking" :key="`${period.key}-${index}-${item.name}`">
             <span>{{ index + 1 }}</span>
             <strong :title="item.name">{{ item.name }}</strong>
             <b>{{ formatAmount(item.usage) }}</b>
@@ -50,7 +50,7 @@ const props = defineProps<{
   error: string
 }>()
 
-const formatAmount = (value: number): string => `${formatUsageBoardTokens(value)} ${usageBoardTokenUnit(value)} Tokens`
+const formatAmount = (value: number): string => value === 0 ? '0 Tokens' : `${formatUsageBoardTokens(value)} ${usageBoardTokenUnit(value)} Tokens`
 
 const lifetime = computed<DashboardPeriodStats>(() => ({
   users: props.stats.usage_board?.users ?? props.stats.total_api_keys,

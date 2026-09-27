@@ -899,7 +899,7 @@ func (s *UsageLogRepoSuite) TestGetUserDashboardStats() {
 	s.Require().Equal([]usagestats.UserDashboardUsageRanking{{APIKeyID: apiKey.ID, APIKeyName: "k", TotalTokens: 30}}, stats.UsageBoard.Ranking)
 }
 
-func (s *UsageLogRepoSuite) TestGetUserDashboardStatsUsageBoardTopTen() {
+func (s *UsageLogRepoSuite) TestGetUserDashboardStatsUsageBoardAllKeys() {
 	user := mustCreateUser(s.T(), s.client, &service.User{Email: "userdash-top@test.com"})
 	foreign := mustCreateUser(s.T(), s.client, &service.User{Email: "userdash-foreign@test.com"})
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-userdash-top"})
@@ -915,6 +915,7 @@ func (s *UsageLogRepoSuite) TestGetUserDashboardStatsUsageBoardTopTen() {
 	}
 	zeroKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-userdash-zero", Name: "zero"})
 	s.createUsageLog(user, zeroKey, account, 0, 0, 0, time.Now())
+	unusedKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-userdash-unused", Name: "unused"})
 	deletedKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-userdash-deleted", Name: "deleted"})
 	s.createUsageLog(user, deletedKey, account, 1_000, 0, 0, time.Now())
 	_, err := s.tx.ExecContext(s.ctx, "UPDATE api_keys SET deleted_at = NOW() WHERE id = $1", deletedKey.ID)
@@ -925,15 +926,20 @@ func (s *UsageLogRepoSuite) TestGetUserDashboardStatsUsageBoardTopTen() {
 	stats, err := s.repo.GetUserDashboardStats(s.ctx, user.ID)
 	s.Require().NoError(err)
 	s.Require().NotNil(stats.UsageBoard)
+	s.Require().Equal(int64(13), stats.TotalAPIKeys)
 	s.Require().Equal(int64(11), stats.UsageBoard.Users)
 	s.Require().Equal(int64(66), stats.UsageBoard.TotalTokens)
-	s.Require().Len(stats.UsageBoard.Ranking, 10)
+	s.Require().Len(stats.UsageBoard.Ranking, 13)
 	s.Require().Equal(keys[10].ID, stats.UsageBoard.Ranking[0].APIKeyID)
 	s.Require().Equal(int64(11), stats.UsageBoard.Ranking[0].TotalTokens)
 	s.Require().Equal(keys[1].ID, stats.UsageBoard.Ranking[9].APIKeyID)
 	s.Require().Equal(fmt.Sprintf("shared (#%d)", keys[1].ID), stats.UsageBoard.Ranking[9].APIKeyName)
+	s.Require().Equal(keys[0].ID, stats.UsageBoard.Ranking[10].APIKeyID)
+	s.Require().Equal(zeroKey.ID, stats.UsageBoard.Ranking[11].APIKeyID)
+	s.Require().Zero(stats.UsageBoard.Ranking[11].TotalTokens)
+	s.Require().Equal(unusedKey.ID, stats.UsageBoard.Ranking[12].APIKeyID)
+	s.Require().Zero(stats.UsageBoard.Ranking[12].TotalTokens)
 	for _, item := range stats.UsageBoard.Ranking {
-		s.Require().NotEqual(zeroKey.ID, item.APIKeyID)
 		s.Require().NotEqual(deletedKey.ID, item.APIKeyID)
 		s.Require().NotEqual(foreignKey.ID, item.APIKeyID)
 	}

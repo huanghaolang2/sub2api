@@ -55,7 +55,7 @@ function mountStats(options: {
 }
 
 describe('UserDashboardStats', () => {
-  it('shows week, month, and lifetime Top 10 cards in one ranking grid', () => {
+  it('shows week, month, and lifetime Top cards in one ranking grid', () => {
     const wrapper = mountStats({
       periodStats: {
         week: period(120, '第38周（2026-09-14 到 2026-09-19）'),
@@ -68,9 +68,9 @@ describe('UserDashboardStats', () => {
     expect(wrapper.text()).toContain('第38周（2026-09-14 到 2026-09-19）')
     expect(wrapper.text()).toContain('所有时间')
     expect(wrapper.get('.dashboard-ranking-grid').findAll('h3').map((heading) => heading.text())).toEqual([
-      '当周使用 Top 10',
-      '当月使用 Top 10',
-      '累计看板 Top 10',
+      '当周使用 Top',
+      '当月使用 Top',
+      '累计看板 Top',
     ])
     wrapper.unmount()
   })
@@ -93,23 +93,24 @@ describe('UserDashboardStats', () => {
     wrapper.unmount()
   })
 
-  it('renders at most ten ranked API keys for every board', () => {
-    const cumulativeRanking = Array.from({ length: 10 }, (_, index) => ({
+  it('renders every API key in all three rankings', () => {
+    const cumulativeRanking = Array.from({ length: 12 }, (_, index) => ({
       api_key_id: index + 1,
       api_key_name: `累计 ${index + 1}`,
-      total_tokens: 100 - index,
+      total_tokens: index === 11 ? 0 : 100 - index,
     }))
     const wrapper = mountStats({
-      stats: makeStats({ usage_board: { users: 10, total_tokens: 955, ranking: cumulativeRanking } }),
-      periodStats: { week: period(200, '本周', 12), month: period(100, '本月', 10) },
+      stats: makeStats({ usage_board: { users: 11, total_tokens: 955, ranking: cumulativeRanking } }),
+      periodStats: { week: period(200, '本周', 12), month: period(100, '本月', 12) },
     })
     const rankings = wrapper.findAll('.dashboard-ranking-card')
     expect(rankings).toHaveLength(3)
-    expect(rankings.every((board) => board.text().includes('Top 10'))).toBe(true)
-    expect(rankings[0].findAll('li')).toHaveLength(10)
-    expect(rankings[1].findAll('li')).toHaveLength(10)
-    expect(rankings[2].findAll('li')).toHaveLength(10)
-    expect(rankings[2].text()).toContain('累计 10')
+    expect(rankings.every((board) => board.find('h3').text().endsWith(' Top'))).toBe(true)
+    expect(rankings[0].findAll('li')).toHaveLength(12)
+    expect(rankings[1].findAll('li')).toHaveLength(12)
+    expect(rankings[2].findAll('li')).toHaveLength(12)
+    expect(rankings[2].text()).toContain('累计 12')
+    expect(rankings[2].findAll('li')[11].find('b').text()).toBe('0 Tokens')
     wrapper.unmount()
   })
 
@@ -121,7 +122,7 @@ describe('UserDashboardStats', () => {
     expect(wrapper.findAll('.dashboard-ranking-card')).toHaveLength(3)
     expect(wrapper.findAll('.dashboard-ranking-loading')).toHaveLength(2)
     expect(wrapper.text()).toContain('累计文案')
-    expect(wrapper.text()).not.toContain('暂无有效 Token 使用')
+    expect(wrapper.text()).not.toContain('暂无 API Key')
     wrapper.unmount()
   })
 

@@ -1,3 +1,4 @@
+import type { UserDashboardUsageRanking } from '@/api/usage'
 import type { UsageBoardResponse } from '@/api/usageBoard'
 
 export type DashboardTrendKind = 'week' | 'month'
@@ -78,17 +79,29 @@ export function dashboardTrendRange(kind: DashboardTrendKind, now: Date = new Da
   }
 }
 
-export function summarizeUsageBoardPeriod(result: UsageBoardResponse, periodIndex = result.periods.length - 1): DashboardPeriodStats {
-  const values = result.series.map((series) => ({
-    name: series.api_key_name,
-    usage: series.points[periodIndex]?.total_tokens ?? 0
-  }))
+export function summarizeUsageBoardPeriod(
+  result: UsageBoardResponse,
+  periodIndex = result.periods.length - 1,
+  allKeys: UserDashboardUsageRanking[] = []
+): DashboardPeriodStats {
+  const byKey = new Map<number, { name: string; usage: number }>(
+    allKeys.map((key) => [key.api_key_id, { name: key.api_key_name, usage: 0 }])
+  )
+  for (const series of result.series) {
+    if (series.api_key_id !== null) {
+      byKey.set(series.api_key_id, {
+        name: byKey.get(series.api_key_id)?.name ?? series.api_key_name,
+        usage: series.points[periodIndex]?.total_tokens ?? 0
+      })
+    }
+  }
+  const values = [...byKey.entries()]
   const period = result.periods[periodIndex]
 
   return {
-    users: values.filter((item) => item.usage > 0).length,
-    usage: values.reduce((sum, item) => sum + item.usage, 0),
-    ranking: values.filter((item) => item.usage > 0).sort((left, right) => right.usage - left.usage).slice(0, 10),
+    users: values.filter(([, item]) => item.usage > 0).length,
+    usage: values.reduce((sum, [, item]) => sum + item.usage, 0),
+    ranking: values.sort(([leftID, left], [rightID, right]) => right.usage - left.usage || leftID - rightID).map(([, item]) => item),
     error: '',
     rangeLabel: period ? `${period.start} 到 ${clippedEnd(period.end, result.end_date)}` : `${result.start_date} 到 ${result.end_date}`
   }

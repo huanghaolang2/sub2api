@@ -43,8 +43,15 @@ describe('user dashboard', () => {
     vi.clearAllMocks()
     auth.refreshUser.mockResolvedValue(undefined)
     api.getDashboardStats.mockResolvedValue({
-      total_api_keys: 1,
-      usage_board: { users: 1, total_tokens: 120, ranking: [{ api_key_id: 1, api_key_name: '文案 A', total_tokens: 120 }] },
+      total_api_keys: 2,
+      usage_board: {
+        users: 1,
+        total_tokens: 120,
+        ranking: [
+          { api_key_id: 1, api_key_name: '文案 A', total_tokens: 120 },
+          { api_key_id: 2, api_key_name: '未使用', total_tokens: 0 }
+        ]
+      },
     })
     api.getUsageBoard.mockImplementation((_scope, query) => Promise.resolve(board(query.granularity)))
   })
@@ -59,7 +66,7 @@ describe('user dashboard', () => {
           LoadingSpinner: true,
           UserDashboardStats: {
             props: ['periodStats', 'stats'],
-            template: '<section class="stats">{{ periodStats.week.rangeLabel }} {{ periodStats.month.rangeLabel }} 累计 {{ stats.usage_board.users }}</section>',
+            template: '<section class="stats">{{ periodStats.week.rangeLabel }} {{ periodStats.month.rangeLabel }} 周排行 {{ periodStats.week.ranking.map((item) => item.name).join(", ") }} 月排行 {{ periodStats.month.ranking.map((item) => item.name).join(", ") }} 累计 {{ stats.usage_board.users }}</section>',
           },
           UserDashboardTrends: {
             props: ['trends'],
@@ -76,6 +83,8 @@ describe('user dashboard', () => {
     expect(wrapper.text()).toContain('月看板趋势 1')
     expect(wrapper.text()).toContain('第38周（2026-09-14 到 2026-09-19）')
     expect(wrapper.text()).toContain('九月（2026-09-01 到 2026-09-30）')
+    expect(wrapper.text()).toContain('周排行 文案 A, 未使用')
+    expect(wrapper.text()).toContain('月排行 文案 A, 未使用')
     expect(wrapper.text()).toContain('累计 1')
     expect(api.getUsageBoard).toHaveBeenCalledTimes(2)
     expect(api.getUsageBoard).toHaveBeenCalledWith('self', expect.objectContaining({

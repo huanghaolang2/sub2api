@@ -18,10 +18,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { usageAPI, type UserDashboardStats as UserStatsType } from '@/api/usage'
-import { getUsageBoard, UsageBoardGranularity, UsageBoardScope, UsageBoardSortOrder, type UsageBoardQuery } from '@/api/usageBoard'
+import { getUsageBoard, UsageBoardGranularity, UsageBoardScope, UsageBoardSortOrder, type UsageBoardQuery, type UsageBoardResponse } from '@/api/usageBoard'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'
@@ -43,7 +43,19 @@ const statsError = ref('')
 
 const emptyPeriod = (error = ''): DashboardPeriodStats => ({ users: 0, usage: 0, ranking: [], error, rangeLabel: '' })
 const emptyTrend = (error = ''): DashboardTrendSeries => ({ points: [], error })
-const periodStats = ref({ week: emptyPeriod(), month: emptyPeriod() })
+type PeriodKind = 'week' | 'month'
+const periodResults = ref<Record<PeriodKind, UsageBoardResponse | null>>({ week: null, month: null })
+const periodErrors = ref<Record<PeriodKind, string>>({ week: '', month: '' })
+const periodStats = computed(() => {
+  const keys = stats.value?.usage_board?.ranking ?? []
+  const summarize = (kind: PeriodKind): DashboardPeriodStats => {
+    const result = periodResults.value[kind]
+    return result
+      ? { ...summarizeUsageBoardPeriod(result, undefined, keys), rangeLabel: dashboardPeriodLabel(kind, result) }
+      : emptyPeriod(periodErrors.value[kind])
+  }
+  return { week: summarize('week'), month: summarize('month') }
+})
 const trends = ref({ week: emptyTrend(), month: emptyTrend() })
 
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
@@ -89,16 +101,15 @@ async function loadPeriodStats() {
   for (const [index, kind] of kinds.entries()) {
     const result = results[index]
     if (result.status === 'fulfilled') {
-      periodStats.value[kind] = {
-        ...summarizeUsageBoardPeriod(result.value),
-        rangeLabel: dashboardPeriodLabel(kind, result.value)
-      }
+      periodResults.value[kind] = result.value
+      periodErrors.value[kind] = ''
       trends.value[kind] = buildDashboardTrend(result.value, kind)
       continue
     }
 
     const error = result.reason instanceof Error ? result.reason.message : '统计加载失败'
-    periodStats.value[kind] = emptyPeriod(error)
+    periodResults.value[kind] = null
+    periodErrors.value[kind] = error
     trends.value[kind] = emptyTrend(error)
   }
   periodLoading.value = false

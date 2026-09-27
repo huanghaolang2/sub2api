@@ -66,7 +66,7 @@ describe('dashboard trend helpers', () => {
     ])
   })
 
-  it('keeps the ten highest API keys in a period ranking', () => {
+  it('ranks all API keys, including unused keys and keys outside the selected period', () => {
     const data = response({
       series: Array.from({ length: 12 }, (_, index) => ({
         api_key_id: index + 1,
@@ -74,14 +74,47 @@ describe('dashboard trend helpers', () => {
         points: [
           { period_start: '2026-08-31', total_tokens: 0, record_count: 0, data_state: UsageBoardDataState.MISSING },
           { period_start: '2026-09-07', total_tokens: 0, record_count: 0, data_state: UsageBoardDataState.MISSING },
-          { period_start: '2026-09-14', total_tokens: index + 1, record_count: 1, data_state: UsageBoardDataState.OBSERVED },
+          { period_start: '2026-09-14', total_tokens: index === 0 ? 0 : index + 1, record_count: 1, data_state: UsageBoardDataState.OBSERVED },
         ],
       })),
     })
-    const summary = summarizeUsageBoardPeriod(data)
-    expect(summary.ranking).toHaveLength(10)
+    const allKeys = Array.from({ length: 13 }, (_, index) => ({
+      api_key_id: index + 1,
+      api_key_name: `文案 ${index + 1}`,
+      total_tokens: index + 1
+    }))
+    const summary = summarizeUsageBoardPeriod(data, undefined, allKeys)
+    expect(summary.users).toBe(11)
+    expect(summary.ranking).toHaveLength(13)
     expect(summary.ranking[0]).toEqual({ name: '文案 12', usage: 12 })
-    expect(summary.ranking[9]).toEqual({ name: '文案 3', usage: 3 })
+    expect(summary.ranking[10]).toEqual({ name: '文案 2', usage: 2 })
+    expect(summary.ranking.slice(11)).toEqual([
+      { name: '文案 1', usage: 0 },
+      { name: '文案 13', usage: 0 }
+    ])
+  })
+
+  it('uses the cumulative list to keep duplicate key names distinct across periods', () => {
+    const data = response({
+      series: [{
+        api_key_id: 1,
+        api_key_name: '共享',
+        points: [{ period_start: '2026-09-14', total_tokens: 10, record_count: 1, data_state: UsageBoardDataState.OBSERVED }]
+      }]
+    })
+    const allKeys = [
+      { api_key_id: 1, api_key_name: '共享 (#1)', total_tokens: 10 },
+      { api_key_id: 2, api_key_name: '共享 (#2)', total_tokens: 0 }
+    ]
+    expect(summarizeUsageBoardPeriod(data, 0, allKeys).ranking).toEqual([
+      { name: '共享 (#1)', usage: 10 },
+      { name: '共享 (#2)', usage: 0 }
+    ])
+  })
+
+  it('ignores the empty placeholder series when there are no API keys', () => {
+    const data = response({ series: [{ api_key_id: null, api_key_name: '—', points: [] }] })
+    expect(summarizeUsageBoardPeriod(data).ranking).toEqual([])
   })
 
   it('builds week labels and clips the current period to the actual query end', () => {

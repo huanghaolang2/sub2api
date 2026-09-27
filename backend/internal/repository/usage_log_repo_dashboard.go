@@ -383,28 +383,25 @@ func (r *usageLogRepository) fillUserDashboardUsageBoard(ctx context.Context, st
 			SELECT
 				k.id AS api_key_id,
 				COALESCE(NULLIF(BTRIM(k.name), ''), 'API Key #' || k.id::text) AS api_key_name,
-				SUM(
+				COALESCE(SUM(
 					ul.input_tokens::bigint
 					+ ul.output_tokens::bigint
 					+ ul.cache_creation_tokens::bigint
 					+ ul.cache_read_tokens::bigint
-				)::bigint AS total_tokens
-			FROM usage_logs AS ul
-			JOIN api_keys AS k
-			  ON k.id = ul.api_key_id
-			 AND k.deleted_at IS NULL
-			WHERE k.user_id = $1
+				), 0)::bigint AS total_tokens
+			FROM api_keys AS k
+			LEFT JOIN usage_logs AS ul ON ul.api_key_id = k.id
+			WHERE k.user_id = $1 AND k.deleted_at IS NULL
 			GROUP BY k.id, k.name
 		), ranked AS (
 			SELECT
 				api_key_id,
 				api_key_name,
 				total_tokens,
-				COUNT(*) OVER () AS total_users,
+				COUNT(*) FILTER (WHERE total_tokens > 0) OVER () AS total_users,
 				(SUM(total_tokens) OVER ())::bigint AS all_tokens,
 				COUNT(*) OVER (PARTITION BY api_key_name) AS name_count
 			FROM per_key
-			WHERE total_tokens > 0
 		)
 		SELECT
 			api_key_id,
@@ -416,10 +413,9 @@ func (r *usageLogRepository) fillUserDashboardUsageBoard(ctx context.Context, st
 			total_users,
 			all_tokens
 		FROM ranked
-		ORDER BY total_tokens DESC, api_key_id ASC
-		LIMIT 10`
+		ORDER BY total_tokens DESC, api_key_id ASC`
 
-	summary := &usagestats.UserDashboardUsageBoard{Ranking: make([]usagestats.UserDashboardUsageRanking, 0, 10)}
+	summary := &usagestats.UserDashboardUsageBoard{Ranking: make([]usagestats.UserDashboardUsageRanking, 0)}
 	rows, err := r.sql.QueryContext(ctx, query, userID)
 	if err != nil {
 		return err
