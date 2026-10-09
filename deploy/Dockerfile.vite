@@ -7,7 +7,7 @@ FROM ${NODE_IMAGE} AS dependencies
 
 ARG APP_DIR
 
-RUN case "${APP_DIR}" in frontend|frontend2) ;; *) echo "APP_DIR must be frontend or frontend2" >&2; exit 1 ;; esac
+RUN case "${APP_DIR}" in frontend) ;; *) echo "APP_DIR must be frontend" >&2; exit 1 ;; esac
 
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
@@ -19,9 +19,8 @@ RUN --mount=type=cache,id=sub2api-vite-pnpm-store,target=/root/.local/share/pnpm
 
 COPY ${APP_DIR}/ ./
 
-# frontend2 intentionally reuses API, stores, types, and business utilities
-# from frontend/src through Vite aliases. The extra copy is harmless when
-# APP_DIR=frontend and keeps both targets on one reproducible module graph.
+# Keep the shared frontend source available to build-time imports used by the
+# legacy frontend application.
 COPY frontend/src/ /workspace/frontend/src/
 COPY docs/legal/ /workspace/docs/legal/
 

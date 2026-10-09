@@ -1,4 +1,4 @@
-.PHONY: env-check config build build-backend build-frontend build-frontend2 test test-backend test-frontend test-frontend-critical up restart stop-dev
+.PHONY: env-check config build build-backend build-frontend test test-backend test-frontend test-frontend-critical up restart stop-dev
 
 PNPM_VERSION ?= 9.15.9
 PNPM := npx --yes pnpm@$(PNPM_VERSION)
@@ -13,7 +13,7 @@ COMPOSE_MODE_ENV_FILE := $(CURDIR)/deploy/.env.$(DEPLOY_ENV)
 COMPOSE_BASE_FILE := $(CURDIR)/deploy/docker-compose.standalone.yml
 COMPOSE_WORKSPACE_FILE := $(CURDIR)/deploy/docker-compose.workspace.yml
 COMPOSE := docker compose --project-name "$(COMPOSE_PROJECT_NAME)" --env-file "$(COMPOSE_ENV_FILE)" --env-file "$(COMPOSE_MODE_ENV_FILE)" -f "$(COMPOSE_BASE_FILE)" -f "$(COMPOSE_WORKSPACE_FILE)"
-DOCKER_SERVICES := sub2api frontend frontend2
+DOCKER_SERVICES := sub2api frontend
 
 FRONTEND_CRITICAL_VITEST := \
 	src/i18n/__tests__/localeKeyCompleteness.spec.ts \
@@ -55,8 +55,8 @@ config: env-check
 	@$(COMPOSE) config --quiet
 	@echo "[ok] Docker Compose $(DEPLOY_ENV) 配置有效"
 
-# 一键编译后端和两个前端
-build: build-backend build-frontend build-frontend2
+# 一键编译后端和前端
+build: build-backend build-frontend
 
 # 构建后端 Docker 镜像。
 build-backend: env-check
@@ -65,10 +65,6 @@ build-backend: env-check
 # 构建原前端 Docker 镜像。
 build-frontend: env-check
 	@$(COMPOSE) build frontend
-
-# 构建新版前端 Docker 镜像。
-build-frontend2: env-check
-	@$(COMPOSE) build frontend2
 
 # 运行测试（后端 + 前端）
 test: test-backend test-frontend
@@ -84,11 +80,11 @@ test-frontend:
 test-frontend-critical:
 	@$(PNPM) --dir frontend exec vitest run $(FRONTEND_CRITICAL_VITEST)
 
-# 首次创建并启动三个 Docker 服务；不会构建镜像。
+# 首次创建并启动后端和前端服务；不会构建镜像。
 up: env-check
-	@$(COMPOSE) up -d --no-build $(DOCKER_SERVICES)
+	@$(COMPOSE) up -d --no-build --remove-orphans $(DOCKER_SERVICES)
 
-# 停止三个 Docker 服务，不删除容器和数据卷。
+# 停止后端和前端服务，不删除容器和数据卷。
 stop-dev:
 	@$(COMPOSE) stop $(DOCKER_SERVICES)
 
@@ -109,7 +105,7 @@ restart: env-check
 	if [ -n "$$stop_targets" ]; then \
 		$(COMPOSE) stop $$stop_targets; \
 	fi; \
-	$(COMPOSE) up -d --no-build $(DOCKER_SERVICES); \
+	$(COMPOSE) up -d --no-build --remove-orphans $(DOCKER_SERVICES); \
 	echo "[ok] Docker 服务已按 $(DEPLOY_ENV) 环境全部启动"; \
 	echo "[访问地址]"; \
 	started="$$( $(COMPOSE) ps --status running --services )"; \
@@ -118,7 +114,6 @@ restart: env-check
 			case "$$service" in \
 				sub2api) container_port=8080 ;; \
 				frontend) container_port=3000; label="frontend" ;; \
-				frontend2) container_port=3000; label="frontend2" ;; \
 			esac; \
 			binding="$$( $(COMPOSE) port "$$service" "$$container_port" 2>/dev/null | head -n 1 )"; \
 			if [ -n "$$binding" ]; then \
