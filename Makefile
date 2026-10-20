@@ -89,12 +89,11 @@ up: env-check
 stop-dev:
 	@$(COMPOSE) stop $(DOCKER_SERVICES)
 
-# 每次先构建后端和前端镜像，成功后停止运行中的容器并启动全部 Docker 服务。
+# 使用当前环境标签对应的本地镜像重建并启动容器，不构建或拉取镜像。
 restart: env-check
 	@echo "[deploy] 当前环境: $(DEPLOY_ENV)"
 	@echo "[deploy] 配置文件: deploy/.env + deploy/.env.$(DEPLOY_ENV)"
-	@echo "[deploy] 重新构建后端和前端镜像"
-	@$(COMPOSE) build $(DOCKER_SERVICES)
+	@echo "[deploy] 使用当前环境标签对应的最新本地镜像重建容器"
 	@set -eu; \
 	running="$$( $(COMPOSE) ps --status running --services )"; \
 	stop_targets=""; \
@@ -108,7 +107,7 @@ restart: env-check
 	if [ -n "$$stop_targets" ]; then \
 		$(COMPOSE) stop $$stop_targets; \
 	fi; \
-	$(COMPOSE) up -d --no-build --remove-orphans $(DOCKER_SERVICES); \
+	$(COMPOSE) up -d --no-build --pull never --force-recreate --remove-orphans $(DOCKER_SERVICES); \
 	echo "[ok] Docker 服务已按 $(DEPLOY_ENV) 环境全部启动"; \
 	echo "[访问地址]"; \
 	started="$$( $(COMPOSE) ps --status running --services )"; \
