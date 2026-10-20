@@ -1,0 +1,10 @@
+services:
+  dashboard-reporter:
+    build:
+      context: ./dashboard-reporter
+    env_file:
+      - ./dashboard-reporter/.env.local
+    volumes:
+      - ./dashboard-reporter/data:/data
+    networks:
+      - default

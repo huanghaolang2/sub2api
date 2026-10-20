@@ -1,0 +1,12 @@
+{
+  "name": "sub2api-dashboard-reporter",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "start": "node reporter.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.61.1"
+  }
+}
