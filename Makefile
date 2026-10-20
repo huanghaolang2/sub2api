@@ -89,10 +89,12 @@ up: env-check
 stop-dev:
 	@$(COMPOSE) stop $(DOCKER_SERVICES)
 
-# 停止正在运行的容器，跳过未运行的容器，然后启动全部 Docker 服务。
+# 每次先构建后端和前端镜像，成功后停止运行中的容器并启动全部 Docker 服务。
 restart: env-check
 	@echo "[deploy] 当前环境: $(DEPLOY_ENV)"
 	@echo "[deploy] 配置文件: deploy/.env + deploy/.env.$(DEPLOY_ENV)"
+	@echo "[deploy] 重新构建后端和前端镜像"
+	@$(COMPOSE) build $(DOCKER_SERVICES)
 	@set -eu; \
 	running="$$( $(COMPOSE) ps --status running --services )"; \
 	stop_targets=""; \
