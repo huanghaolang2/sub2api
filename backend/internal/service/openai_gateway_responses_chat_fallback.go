@@ -92,6 +92,20 @@ func (s *OpenAIGatewayService) forwardResponsesViaRawChatCompletions(
 	if err != nil {
 		return nil, fmt.Errorf("marshal chat completions fallback request: %w", err)
 	}
+	if isDeepSeekCompatibilityTarget(account, upstreamModel) {
+		thinking := "enabled"
+		if chatReq.ReasoningEffort == "none" {
+			thinking = "disabled"
+			chatBody, err = sjson.DeleteBytes(chatBody, "reasoning_effort")
+			if err != nil {
+				return nil, err
+			}
+		}
+		chatBody, err = sjson.SetBytes(chatBody, "thinking.type", thinking)
+		if err != nil {
+			return nil, err
+		}
+	}
 	chatBody, err = s.applyOpenAIFastPolicyToBody(ctx, account, upstreamModel, chatBody)
 	if err != nil {
 		var blocked *OpenAIFastBlockedError
@@ -469,6 +483,9 @@ func isDeepSeekCatalogModel(model string) bool {
 // 不放宽成「任意上游的 deepseek-* 模型名」：占位符是写进请求体的额外字段，
 // 对没有这条约束的上游属于无谓改写，且可能触发未知字段校验。
 func requiresDeepSeekChatReasoning(account *Account, body []byte) bool {
+	if isDeepSeekCompatibilityTarget(account, gjson.GetBytes(body, "model").String()) {
+		return true
+	}
 	if targetsDeepSeekAPIHost(account) {
 		return true
 	}

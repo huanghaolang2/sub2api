@@ -60,6 +60,9 @@ func accountCodexToolCapabilities(account *Account, modelID string) map[string]j
 	if metadata, ok := account.GetUpstreamModelMetadata(modelID); ok {
 		applyCodexToolCapabilities(capabilities, metadata.CodexToolCapabilities, true)
 	}
+	if isDeepSeekCompatibilityTarget(account, modelID) {
+		constrainDeepSeekCodexCapabilities(capabilities)
+	}
 	if account.IsOpenAI() && shouldForwardOpenAIResponsesViaRawChatCompletions(account) {
 		// This bridge implements client-side tool discovery, even without a native manifest.
 		applyCodexToolCapabilities(capabilities, map[string]json.RawMessage{"supports_search_tool": json.RawMessage("true")}, false)
@@ -200,12 +203,12 @@ func groupCodexModelMetadata(
 			if !codexExplicitModelMappingClaims(*account, modelID) {
 				continue
 			}
-			lookupModel = account.GetMappedModel(modelID)
+			lookupModel = codexAccountCapabilityModel(account, modelID)
 		} else {
 			if !account.IsModelSupported(upstreamModel) {
 				continue
 			}
-			lookupModel = account.GetMappedModel(upstreamModel)
+			lookupModel = codexAccountCapabilityModel(account, upstreamModel)
 		}
 		if strings.TrimSpace(lookupModel) != modelID {
 			publicAlias = true
@@ -243,6 +246,9 @@ func codexExplicitModelTargetsConflict(accounts []Account, modelID string) bool 
 	targets := make(map[string]struct{})
 	for i := range accounts {
 		account := &accounts[i]
+		if account.IsOpenAIPassthroughEnabled() {
+			continue
+		}
 		mappedModel, matched := account.ResolveMappedModel(modelID)
 		mappedModel = strings.TrimSpace(mappedModel)
 		if !matched || mappedModel == "" {
@@ -257,7 +263,7 @@ func codexExplicitModelTargetsConflictForPlatform(accounts []Account, platform, 
 	targets := make(map[string]struct{})
 	for i := range accounts {
 		account := &accounts[i]
-		if !codexAccountServesPlatformModel(account, platform, modelID) {
+		if account.IsOpenAIPassthroughEnabled() || !codexAccountServesPlatformModel(account, platform, modelID) {
 			continue
 		}
 		mappedModel, matched := account.ResolveMappedModel(modelID)

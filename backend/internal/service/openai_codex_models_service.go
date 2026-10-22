@@ -1003,12 +1003,15 @@ func buildCodexModelsManifest(
 		if err != nil {
 			return nil, err
 		}
-		if capabilities := modelMetadata[modelID].CodexToolCapabilities; len(capabilities) > 0 {
+		if capabilities := modelMetadata[modelID].CodexToolCapabilities; len(capabilities) > 0 || isDeepSeekCatalogModel(metadataModelID) {
 			var fields map[string]json.RawMessage
 			if err := json.Unmarshal(encoded, &fields); err != nil {
 				return nil, err
 			}
 			applyCodexToolCapabilities(fields, capabilities, true)
+			if isDeepSeekCatalogModel(metadataModelID) {
+				constrainDeepSeekCodexCapabilities(fields)
+			}
 			encoded, err = json.Marshal(fields)
 			if err != nil {
 				return nil, err
@@ -1101,7 +1104,7 @@ func uniqueCodexMappedModel(accounts []Account, platform string, modelID string)
 	targets := make(map[string]struct{})
 	for i := range accounts {
 		account := &accounts[i]
-		if !codexAccountServesPlatformModel(account, platform, modelID) {
+		if account.IsOpenAIPassthroughEnabled() || !codexAccountServesPlatformModel(account, platform, modelID) {
 			continue
 		}
 		mappedModel, matched := account.ResolveMappedModel(modelID)
@@ -1155,7 +1158,7 @@ func groupCodexModelSupportsImageInput(
 			continue
 		}
 		candidates++
-		if !accountCodexModelSupportsImageInput(account, account.GetMappedModel(upstreamModel)) {
+		if !accountCodexModelSupportsImageInput(account, codexAccountCapabilityModel(account, upstreamModel)) {
 			return false
 		}
 	}
@@ -1271,7 +1274,7 @@ func codexCompositeRouteMatchesModel(routes []CompositeModelRoute, modelID strin
 }
 
 func codexExplicitModelMappingClaims(account Account, modelID string) bool {
-	if account.Credentials == nil || strings.TrimSpace(modelID) == "" {
+	if account.IsOpenAIPassthroughEnabled() || account.Credentials == nil || strings.TrimSpace(modelID) == "" {
 		return false
 	}
 	mapped := strings.TrimSpace(account.GetModelMapping()[modelID])
@@ -2111,9 +2114,17 @@ func adjustAPIKeyCodexModelsManifest(body []byte, account *Account) ([]byte, err
 		if err := json.Unmarshal(model["slug"], &slug); err != nil {
 			continue
 		}
-		target := slug
-		if account != nil {
-			target = account.GetMappedModel(slug)
+		target := codexAccountCapabilityModel(account, slug)
+		if deepSeekCompatibilityModel(account, slug) != "" {
+			if constrainDeepSeekCodexCapabilities(model) {
+				adjusted, err := json.Marshal(model)
+				if err != nil {
+					return nil, fmt.Errorf("encode DeepSeek model %q: %w", slug, err)
+				}
+				models[i] = adjusted
+				changed = true
+			}
+			continue
 		}
 		if isOpenAIGPT6AstraModel(target) {
 			target = "gpt-6-astra"
@@ -2188,10 +2199,7 @@ func convertOpenAIModelListToCodexManifestForAccount(body []byte, account *Accou
 			continue
 		}
 		modelIDs = append(modelIDs, id)
-		capabilityModel := id
-		if account != nil {
-			capabilityModel = account.GetMappedModel(id)
-		}
+		capabilityModel := codexAccountCapabilityModel(account, id)
 		metadataModels[id] = capabilityModel
 		capabilities := accountCodexToolCapabilities(account, capabilityModel)
 		applyCodexToolCapabilities(capabilities, entry, true)
@@ -2286,7 +2294,7 @@ func applySyncedAPIKeyCodexModelMetadata(body []byte, account *Account, overwrit
 			continue
 		}
 		slug = strings.TrimSpace(slug)
-		lookupModel := account.GetMappedModel(slug)
+		lookupModel := codexAccountCapabilityModel(account, slug)
 		metadata, ok := snapshot.Models[lookupModel]
 		if !ok {
 			continue
@@ -2296,7 +2304,11 @@ func applySyncedAPIKeyCodexModelMetadata(body []byte, account *Account, overwrit
 			metadata.Description = ""
 		}
 
-		descriptor := newConfiguredCodexModelDescriptor(slug)
+		descriptorModel := slug
+		if target := deepSeekCompatibilityModel(account, slug); target != "" {
+			descriptorModel = target
+		}
+		descriptor := newConfiguredCodexModelDescriptor(descriptorModel)
 		applyUpstreamModelMetadataToCodexDescriptor(
 			&descriptor,
 			codexModelMetadataOverride{UpstreamModelMetadata: metadata},
@@ -2336,7 +2348,7 @@ func applySyncedAPIKeyCodexModelMetadata(body []byte, account *Account, overwrit
 			}
 			current, currentExists := model[field]
 			current = bytes.TrimSpace(current)
-			if !overwriteLocalDefaults && currentExists && len(current) > 0 && !bytes.Equal(current, []byte("null")) {
+			if !overwriteLocalDefaults && descriptorModel == slug && currentExists && len(current) > 0 && !bytes.Equal(current, []byte("null")) {
 				continue
 			}
 			if bytes.Equal(current, bytes.TrimSpace(value)) {
@@ -2421,7 +2433,16 @@ func completeAPIKeyCodexModelsManifestMetadata(body []byte, completeAll bool, ac
 			continue
 		}
 
-		descriptor := newConfiguredCodexModelDescriptor(slug)
+		descriptorModel := slug
+		if target := deepSeekCompatibilityModel(account, slug); target != "" {
+			descriptorModel = target
+		}
+		descriptor := newConfiguredCodexModelDescriptor(descriptorModel)
+		descriptor.Slug = slug
+		if descriptorModel != slug {
+			descriptor.DisplayName = slug
+			descriptor.Description = configuredCodexCustomDescription
+		}
 		descriptor.SupportsSearchTool = shouldForwardOpenAIResponsesViaRawChatCompletions(account)
 		if accountCodexModelSupportsImageInput(account, slug) {
 			descriptor.InputModalities = []string{"text", "image"}
@@ -2439,10 +2460,7 @@ func completeAPIKeyCodexModelsManifestMetadata(body []byte, completeAll bool, ac
 			return nil, fmt.Errorf("decode default model %q: %w", slug, err)
 		}
 
-		capabilityModel := slug
-		if account != nil {
-			capabilityModel = account.GetMappedModel(slug)
-		}
+		capabilityModel := codexAccountCapabilityModel(account, slug)
 		capabilities := accountCodexToolCapabilities(account, capabilityModel)
 		modelChanged := applyCodexToolCapabilities(model, capabilities, false)
 		if completeDescriptor {

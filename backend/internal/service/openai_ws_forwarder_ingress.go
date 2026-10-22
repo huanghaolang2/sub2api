@@ -115,6 +115,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	}
 
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
+	firstModel := gjson.GetBytes(firstClientMessage, "model").String()
+	deepSeekBridgeAllowed := s.openAIWSHTTPBridgeEnabled() &&
+		(isDeepSeekCompatibilityTarget(account, firstModel) || deepSeekCompatibilityModel(account, firstModel) != "")
 	forceHTTPBridge := account.Platform == PlatformGrok ||
 		(s.pluginManager != nil && s.pluginManager.ShouldRouteOpenAIOAuth(account))
 	modeRouterV2Enabled := s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled
@@ -133,7 +136,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
 				return fmt.Errorf("websocket ingress requires ws_v2 transport, got=%s", wsDecision.Transport)
 			}
-			if s.shouldBridgeOpenAIWSPassthroughFirstMessage(account, firstClientMessage) {
+			if deepSeekBridgeAllowed || s.shouldBridgeOpenAIWSPassthroughFirstMessage(account, firstClientMessage) {
 				forceHTTPBridge = true
 				break
 			}
@@ -161,6 +164,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				nil,
 			)
 		}
+	}
+	// Retain all existing admission gates. A supported HTTP bridge is a
+	// transport adaptation, not permission to enable a disabled WS account.
+	if deepSeekBridgeAllowed && wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocketV2 {
+		forceHTTPBridge = true
 	}
 	if !forceHTTPBridge && wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
 		return fmt.Errorf("websocket ingress requires ws_v2 transport, got=%s", wsDecision.Transport)
@@ -268,11 +276,33 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		} else {
 			normalized = next
 		}
-		responsesLite := isOpenAIResponsesLiteWebSocketPayload(normalized)
-		if compatibilityBody, compatibilityChanged, compatibilityErr := normalizeOpenAIResponsesWebSocketCompatibilityBodyWithConfig(s.cfg, normalized, account, responsesLite); compatibilityErr != nil {
-			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", compatibilityErr)
-		} else if compatibilityChanged {
-			normalized = compatibilityBody
+		originalModel := strings.TrimSpace(values[1].String())
+		modelMissing := originalModel == ""
+		if modelMissing {
+			originalModel = ingressSessionOriginalModel
+			if originalModel == "" {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "model is required in response.create payload", nil)
+			}
+		}
+		requestModel := originalModel
+		if hooks != nil && hooks.MapRequestModel != nil {
+			mappedModel, mapErr := hooks.MapRequestModel(turn, originalModel)
+			if mapErr != nil {
+				return openAIWSClientPayload{}, mapErr
+			}
+			if mappedModel = strings.TrimSpace(mappedModel); mappedModel != "" {
+				requestModel = mappedModel
+			}
+		}
+		upstreamModel := normalizeOpenAIModelForUpstream(account, account.GetMappedModel(requestModel))
+		deepSeekTarget := isDeepSeekCompatibilityTarget(account, upstreamModel)
+		responsesLite := !deepSeekTarget && isOpenAIResponsesLiteWebSocketPayload(normalized)
+		if !deepSeekTarget {
+			if compatibilityBody, compatibilityChanged, compatibilityErr := normalizeOpenAIResponsesWebSocketCompatibilityBodyWithConfig(s.cfg, normalized, account, responsesLite); compatibilityErr != nil {
+				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", compatibilityErr)
+			} else if compatibilityChanged {
+				normalized = compatibilityBody
+			}
 		}
 		if account.IsOpenAIOAuthLike() {
 			aliasedBody, reverse, aliased, aliasErr := aliasOpenAIOAuthReservedToolNamesBody(normalized)
@@ -285,23 +315,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 		}
 
-		originalModel := strings.TrimSpace(values[1].String())
-		modelMissing := originalModel == ""
-		if originalModel == "" {
-			// 入站 WS 长会话里，部分客户端只在第一轮 response.create 上声明
-			// model，后续 turn 复用同一 session-level model。为避免因省略
-			// model 直接断开用户连接，这里回落到上一轮已通过校验的客户端模型，
-			// 并在下方写回上游 payload，保证账号模型映射/fast policy/图片权限
-			// 仍按同一模型执行。
-			originalModel = ingressSessionOriginalModel
-			if originalModel == "" {
-				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(
-					coderws.StatusPolicyViolation,
-					"model is required in response.create payload",
-					nil,
-				)
-			}
-		}
 		promptCacheKey := strings.TrimSpace(values[2].String())
 		previousResponseID := strings.TrimSpace(values[3].String())
 		previousResponseIDKind := ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
@@ -344,7 +357,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if isCodexCLI {
 			codexImageGenerationExplicitToolPolicy = account.CodexImageGenerationExplicitToolPolicy()
 		}
-		codexBridgeEnabled := isCodexCLI &&
+		codexBridgeEnabled := !deepSeekTarget && isCodexCLI &&
 			!isOpenAIResponsesLiteWebSocketPayload(normalized) &&
 			imageGenerationAllowed &&
 			codexImageGenerationExplicitToolPolicy != codexImageGenerationExplicitToolPolicyStrip &&
@@ -378,17 +391,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				normalized = rebuilt
 			}
 		}
-		requestModel := originalModel
-		if hooks != nil && hooks.MapRequestModel != nil {
-			mappedModel, mapErr := hooks.MapRequestModel(turn, originalModel)
-			if mapErr != nil {
-				return openAIWSClientPayload{}, mapErr
-			}
-			if mappedModel = strings.TrimSpace(mappedModel); mappedModel != "" {
-				requestModel = mappedModel
-			}
-		}
-		upstreamModel := normalizeOpenAIModelForUpstream(account, account.GetMappedModel(requestModel))
 		if modelMissing || upstreamModel != originalModel {
 			next, setErr := applyPayloadMutation(normalized, "model", upstreamModel)
 			if setErr != nil {
@@ -581,6 +583,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		grokCacheSeedPayload := firstPayload.payloadRaw
 		var bridgeReplayInput []json.RawMessage
 		bridgeReplayInputExists := false
+		bridgeResponseID := ""
 		var bridgeAccountFailoverInput []json.RawMessage
 		bridgeAccountFailoverInputExists := false
 		for turn := 1; ; turn++ {
@@ -619,6 +622,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			bridgePayloadRaw := currentBridgePayload.payloadRaw
 			bridgePayloadBytes := currentBridgePayload.payloadBytes
+			deepSeekModel := gjson.GetBytes(bridgePayloadRaw, "model").String()
+			deepSeekTarget := isDeepSeekCompatibilityTarget(account, deepSeekModel)
+			if deepSeekTarget && currentBridgePayload.previousResponseID != "" && bridgeReplayInputExists && currentBridgePayload.previousResponseID != bridgeResponseID {
+				return writeDeepSeekWSCompatibilityError(c, writeClientMessage, deepSeekRequestError(deepSeekModel, "previous_response_id", "response does not belong to the recoverable conversation history"))
+			}
 			toolOutputCoverage := AnalyzeToolCallOutputContextCoverageBytes(currentBridgePayload.payloadRaw)
 			needsBridgeReplay := currentBridgePayload.previousResponseID != "" ||
 				(toolOutputCoverage.HasFunctionCallOutput && !toolOutputCoverage.ContextCoversAllCallIDs)
@@ -662,6 +670,29 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					currentBridgePayload.previousResponseID != "",
 					openAIWSRawPayloadHasToolCallOutput(currentBridgePayload.payloadRaw),
 				)
+			}
+			if deepSeekTarget {
+				historyMode := deepSeekExplicitHistory
+				if bridgeReplayInputExists {
+					historyMode = deepSeekRestoredHistory
+				}
+				// Rehydrate original declarations before migrating additional_tools;
+				// otherwise a newly discovered namespace would replace the custom
+				// tools inherited from the preceding turn.
+				if _, present := openAIWSHTTPBridgeRawField(currentBridgePayload.payloadRaw, "tools"); !present {
+					if state, ok := openAIWSHTTPBridgeToolStateFromContext(c); ok && state.AccountID == account.ID && len(state.DeclaredTools) > 0 {
+						var restoreErr error
+						bridgePayloadRaw, restoreErr = sjson.SetRawBytes(bridgePayloadRaw, "tools", state.DeclaredTools)
+						if restoreErr != nil {
+							return restoreErr
+						}
+					}
+				}
+				compatible, compatibilityErr := prepareDeepSeekAliasRequestBody(bridgePayloadRaw, deepSeekModel, historyMode)
+				if compatibilityErr != nil {
+					return writeDeepSeekWSCompatibilityError(c, writeClientMessage, compatibilityErr)
+				}
+				bridgePayloadRaw, bridgePayloadBytes = compatible, len(compatible)
 			}
 			grokCacheIdentity := ""
 			if account.Platform == PlatformGrok {
@@ -722,9 +753,18 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			// turnReplayInput/turnAccountFailoverInput 可能共享同一头数组（转移自
 			// bridgeCurrentItems），保存历史必须经 combine 新建头，禁止就地 append。
 			bridgeReplayInput = turnReplayInput
+			if deepSeekTarget {
+				bridgeReplayInput = deepSeekReplayMessages(bridgeReplayInput)
+			}
 			bridgeReplayInputExists = turnReplayInputExists
-			if result.wsReplayInputExists {
-				bridgeReplayInput = combineOpenAIWSReplayItems(bridgeReplayInput, result.wsReplayInput)
+			replayItems := result.wsReplayInput
+			if deepSeekTarget {
+				// A stateless model needs ordinary assistant messages and plain
+				// reasoning as well as tool calls on the following turn.
+				replayItems = result.wsAccountFailoverReplayInput
+			}
+			if len(replayItems) > 0 {
+				bridgeReplayInput = combineOpenAIWSReplayItems(bridgeReplayInput, replayItems)
 				bridgeReplayInputExists = true
 			}
 			bridgeAccountFailoverInput = turnAccountFailoverInput
@@ -742,6 +782,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				turnState = bridgeTurnState
 			}
 			responseID := strings.TrimSpace(result.RequestID)
+			bridgeResponseID = responseID
 			if responseID != "" && stateStore != nil {
 				ttl := s.openAIWSResponseStickyTTL()
 				logOpenAIWSBindResponseAccountWarn(groupID, account.ID, responseID, stateStore.BindResponseAccount(ctx, groupID, responseID, account.ID, ttl))

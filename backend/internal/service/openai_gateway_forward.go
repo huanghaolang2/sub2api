@@ -19,6 +19,7 @@ import (
 
 // Forward forwards request to OpenAI API
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+	deepSeekModel := deepSeekCompatibilityModel(account, gjson.GetBytes(body, "model").String())
 	beginUpstreamResponseModelObservation(c)
 	ClearActualOpenAIUpstreamEndpoint(c)
 	if shouldForwardOpenAIResponsesViaRawChatCompletions(account) {
@@ -57,6 +58,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		})
 		return nil, errors.New("codex_cli_only restriction: only codex official clients are allowed")
 	}
+	if deepSeekModel != "" && !isOpenAIResponsesCompactPath(c) {
+		var compatibilityErr error
+		body, compatibilityErr = prepareDeepSeekAliasRequestBody(body, deepSeekModel, deepSeekExplicitHistory)
+		if compatibilityErr != nil {
+			writeDeepSeekCompatibilityError(c, compatibilityErr)
+			return nil, compatibilityErr
+		}
+	}
 
 	normalizedBody, normalized, err := normalizeOpenAICodexCompactReasoningEffortForAccount(c, account, body)
 	if err != nil {
@@ -89,7 +98,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			body = reasoningBody
 		}
 	}
-	responsesLite := account.IsOpenAI() && isOpenAIResponsesLiteHeader(c.GetHeader(responsesLiteHeader))
+	responsesLite := deepSeekModel == "" && account.IsOpenAI() && isOpenAIResponsesLiteHeader(c.GetHeader(responsesLiteHeader))
 	if responsesLite {
 		liteBody, changed, liteErr := normalizeOpenAIResponsesLitePayloadForAccount(body, account)
 		if liteErr != nil {
@@ -139,15 +148,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	nativeCNResponses := account.UsesNativeCNResponses()
 	nativeDeepSeekResponses := account.Platform == PlatformDeepseek && nativeCNResponses
-	if nativeDeepSeekResponses && account.Type == AccountTypeAPIKey && !compactPath &&
-		needsOpenAIResponsesClientToolAdaptation(body) {
-		adaptedBody, mapping, adaptErr := adaptOpenAIResponsesClientTools(body)
-		if adaptErr != nil {
-			return nil, fmt.Errorf("adapt DeepSeek Responses client tools: %w", adaptErr)
-		}
-		body = adaptedBody
-		setOpenAIResponsesClientToolMapping(c, mapping)
-	}
 
 	originalBody := body
 	rememberOpenCodeInboundBody(c, originalBody)
@@ -166,11 +166,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			body = normalized
 			originalBody = normalized
 		}
-		if normalized, changed, normalizeErr := normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body, isOpenAIResponsesCompactPath(c)); normalizeErr != nil {
-			return nil, normalizeErr
-		} else if changed {
-			body = normalized
-			originalBody = normalized
+		if deepSeekModel == "" {
+			if normalized, changed, normalizeErr := normalizeOpenAIAPIKeyStoreFalseReasoningReplay(body, isOpenAIResponsesCompactPath(c)); normalizeErr != nil {
+				return nil, normalizeErr
+			} else if changed {
+				body = normalized
+				originalBody = normalized
+			}
 		}
 		requestView = newOpenAIRequestView(body)
 		reqModel, reqStream, promptCacheKey = requestView.Model, requestView.Stream, requestView.PromptCacheKey
@@ -192,8 +194,19 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	case APIProtocolChatCompletions:
 		return s.forwardResponsesViaRawChatCompletions(ctx, c, account, body, startTime)
 	}
+	if (nativeDeepSeekResponses || deepSeekModel != "") && account.Type == AccountTypeAPIKey && !compactPath {
+		adaptedBody, mapping, adaptErr := adaptResponsesClientToolsForFunctionUpstream(body, "DeepSeek")
+		if adaptErr != nil {
+			writeDeepSeekCompatibilityError(c, adaptErr)
+			return nil, adaptErr
+		}
+		body = adaptedBody
+		originalBody = adaptedBody
+		requestView = newOpenAIRequestView(body)
+		setOpenAIResponsesClientToolMapping(c, mapping)
+	}
 	SetActualOpenAIUpstreamEndpoint(c, openAIResponsesUpstreamEndpoint)
-	if account.IsOpenAI() && (account.IsOpenAIApiKey() || account.IsOpenAIOAuthLike()) {
+	if deepSeekModel == "" && account.IsOpenAI() && (account.IsOpenAIApiKey() || account.IsOpenAIOAuthLike()) {
 		normalizedReasoningBody, reasoningChanged, reasoningErr := normalizeOpenAIResponsesReasoningContentReplay(body)
 		if reasoningErr != nil {
 			return nil, fmt.Errorf("normalize OpenAI Responses reasoning content replay: %w", reasoningErr)
@@ -344,7 +357,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	if apiKey != nil {
 		imageGenerationAllowed = GroupAllowsImageGeneration(apiKey.Group)
 	}
-	codexImageGenerationBridgeEnabled := isCodexCLI &&
+	codexImageGenerationBridgeEnabled := deepSeekModel == "" && isCodexCLI &&
 		!isOpenAIResponsesLiteHeader(c.GetHeader(responsesLiteHeader)) &&
 		imageGenerationAllowed &&
 		codexImageGenerationExplicitToolPolicy != codexImageGenerationExplicitToolPolicyStrip &&
@@ -397,7 +410,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Upstream model resolved: %s -> %s (account: %s, type: %s, isCodexCLI: %v)", billingModel, upstreamModel, account.Name, account.Type, isCodexCLI)
 		}
 	}
-	if strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String()) == "minimal" {
+	if deepSeekModel == "" && strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String()) == "minimal" {
 		markPatchSet("reasoning.effort", "none")
 		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
 	}
@@ -1529,6 +1542,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	if err := applyMappedGPT55LiteCompatibility(req, account, body); err != nil {
 		return nil, err
 	}
+	stripDeepSeekLiteHeader(req, account, body)
 	return req, nil
 }
 

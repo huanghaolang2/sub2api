@@ -30,6 +30,8 @@ const openAIWSHTTPBridgeToolStateContextKey = "openai_ws_http_bridge_tool_state"
 type openAIWSHTTPBridgeToolState struct {
 	ClientMapping apicompat.ResponsesClientToolMapping
 	LoweredTools  json.RawMessage
+	DeclaredTools json.RawMessage
+	AccountID     int64
 }
 
 func openAIWSHTTPBridgeToolStateFromContext(c *gin.Context) (openAIWSHTTPBridgeToolState, bool) {
@@ -46,6 +48,7 @@ func setOpenAIWSHTTPBridgeToolState(c *gin.Context, state openAIWSHTTPBridgeTool
 		return
 	}
 	state.LoweredTools = append(json.RawMessage(nil), state.LoweredTools...)
+	state.DeclaredTools = append(json.RawMessage(nil), state.DeclaredTools...)
 	c.Set(openAIWSHTTPBridgeToolStateContextKey, state)
 }
 
@@ -444,6 +447,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		return nil, errors.New("client websocket writer is nil")
 	}
 	responseModelObserver := &upstreamResponseModelObserver{}
+	deepSeekTarget := isDeepSeekCompatibilityTarget(account, gjson.GetBytes(payload, "model").String())
 
 	body, err := prepareOpenAIWSHTTPBridgeBody(account, payload)
 	if err != nil {
@@ -453,7 +457,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	_, grokExplicitToolsField := openAIWSHTTPBridgeRawField(grokIntentSourceBody, "tools")
 	grokExplicitToolIntent := account.Platform == PlatformGrok && hasGrokResponsesToolIntent(grokIntentSourceBody)
 	var clientToolMapping apicompat.ResponsesClientToolMapping
-	functionToolUpstream := (account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey) || account.Platform == PlatformGrok
+	functionToolUpstream := (account.Platform == PlatformOpenAI && account.Type == AccountTypeAPIKey) || account.Platform == PlatformGrok || deepSeekTarget
 	if functionToolUpstream {
 		if account.Platform == PlatformGrok {
 			body, err = sanitizeGrokResponsesInput(body)
@@ -462,6 +466,16 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			}
 		}
 		inheritedState, _ := openAIWSHTTPBridgeToolStateFromContext(c)
+		if deepSeekTarget && inheritedState.AccountID != account.ID {
+			inheritedState = openAIWSHTTPBridgeToolState{}
+		}
+		var declaredTools json.RawMessage
+		if deepSeekTarget {
+			declaredTools = inheritedState.DeclaredTools
+			if current, present := openAIWSHTTPBridgeRawField(body, "tools"); present {
+				declaredTools = current
+			}
+		}
 		inheritedLoweredTools := decodeOpenAIWSHTTPBridgeLoweredTools(inheritedState.LoweredTools)
 		body, clientToolMapping, err = adaptResponsesClientToolsForFunctionUpstreamWithMapping(
 			body,
@@ -470,6 +484,9 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			inheritedLoweredTools,
 		)
 		if err != nil {
+			if deepSeekTarget {
+				return nil, writeDeepSeekWSCompatibilityError(c, writeClientMessage, deepSeekRequestError(gjson.GetBytes(body, "model").String(), "tools", err.Error()))
+			}
 			return nil, fmt.Errorf("adapt %s client tools: %w", openAIWSHTTPBridgeToolUpstreamName(account), err)
 		}
 		if account.Platform == PlatformGrok && !grokExplicitToolsField && !grokExplicitToolIntent && len(inheritedLoweredTools) > 0 && hasGrokResponsesToolIntent(body) {
@@ -487,9 +504,11 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		setOpenAIWSHTTPBridgeToolState(c, openAIWSHTTPBridgeToolState{
 			ClientMapping: clientToolMapping,
 			LoweredTools:  loweredTools,
+			DeclaredTools: declaredTools,
+			AccountID:     account.ID,
 		})
 	}
-	if account.Platform != PlatformGrok && isOpenAIResponsesLiteWebSocketPayload(payload) {
+	if !deepSeekTarget && account.Platform != PlatformGrok && isOpenAIResponsesLiteWebSocketPayload(payload) {
 		liteBody, liteChanged, liteErr := normalizeOpenAIResponsesLitePayloadForAccount(body, account)
 		if liteErr != nil {
 			return nil, fmt.Errorf("normalize responses Lite payload: %w", liteErr)
@@ -512,7 +531,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 		if buildErr != nil {
 			return nil, buildErr
 		}
-		if account.Platform != PlatformGrok && isOpenAIResponsesLiteWebSocketPayload(payload) {
+		if !deepSeekTarget && account.Platform != PlatformGrok && isOpenAIResponsesLiteWebSocketPayload(payload) {
 			upstreamReq.Header.Set(responsesLiteHeader, "true")
 		}
 		if err := applyMappedGPT55LiteCompatibility(upstreamReq, account, requestBody); err != nil {
