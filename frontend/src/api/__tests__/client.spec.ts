@@ -91,6 +91,33 @@ describe('API Client', () => {
       expect(config.params).toHaveProperty('timezone')
     })
 
+    it('explicit 优先保留 URL 时区并移除重复参数，保留重复 ID', async () => {
+      const { RequestTimezonePolicy } = await import('@/api/client')
+      const adapter = vi.fn().mockImplementation(async (config) => ({ status: 200, data: { code: 0, data: {} }, headers: {}, config, statusText: 'OK' }))
+      apiClient.defaults.adapter = adapter
+      await apiClient.get('/usage/board?timezone=Asia%2FTaipei&api_key_ids=1&api_key_ids=2&timezone=UTC', {
+        params: { timezone: 'America/New_York', page: 1 }, timezonePolicy: RequestTimezonePolicy.EXPLICIT,
+      })
+      const config = adapter.mock.calls[0][0]
+      const uri = new URL(apiClient.getUri(config), 'https://local.test')
+      expect(uri.searchParams.getAll('timezone')).toEqual(['Asia/Taipei'])
+      expect(uri.searchParams.getAll('api_key_ids')).toEqual(['1', '2'])
+      expect(uri.searchParams.get('page')).toBe('1')
+      expect(uri.searchParams.has('timezonePolicy')).toBe(false)
+    })
+
+    it('explicit 保留 params 时区，空值使用 UTC；默认策略仍使用浏览器时区', async () => {
+      const { RequestTimezonePolicy } = await import('@/api/client')
+      const adapter = vi.fn().mockImplementation(async (config) => ({ status: 200, data: { code: 0, data: {} }, headers: {}, config, statusText: 'OK' }))
+      apiClient.defaults.adapter = adapter
+      const resolved = Intl.DateTimeFormat().resolvedOptions()
+      vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({ ...resolved, timeZone: 'Pacific/Honolulu' })
+      await apiClient.get('/usage/dashboard/models', { params: { timezone: 'Asia/Taipei' }, timezonePolicy: RequestTimezonePolicy.EXPLICIT })
+      await apiClient.get('/usage/dashboard/models', { params: { timezone: '' }, timezonePolicy: RequestTimezonePolicy.EXPLICIT })
+      await apiClient.get('/legacy', { params: { timezone: 'Asia/Taipei' } })
+      expect(adapter.mock.calls.map(([config]) => config.params.timezone)).toEqual(['Asia/Taipei', 'UTC', 'Pacific/Honolulu'])
+    })
+
     it('POST 请求不附加 timezone 参数', async () => {
       const adapter = vi.fn().mockResolvedValue({
         status: 200,

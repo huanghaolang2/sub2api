@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import UserDashboardTrends from '../UserDashboardTrends.vue'
 import type { DashboardTrendSeries } from '../dashboardTrends'
+import { DashboardKind, DashboardState, type DashboardTrendCardModel, type DashboardTrendSectionModel } from '../dashboardBoards'
 
 function trend(prefix: string, values: number[]): DashboardTrendSeries {
   return {
@@ -17,15 +18,19 @@ function trend(prefix: string, values: number[]): DashboardTrendSeries {
   }
 }
 
+
+function card(id: string, title: string, data: DashboardTrendSeries, state = data.error ? DashboardState.ERROR : DashboardState.READY): DashboardTrendCardModel {
+  return { id, title, caption: id === 'week' ? '最近 4 个自然周' : '最近 3 个自然月', rangeLabel: '2026-09-01 到 2026-09-30', state, error: data.error, points: data.points, retryTargets: data.error ? [{ key: `${id}-request`, label: '重试' }] : [] }
+}
+function section(week: DashboardTrendSeries, month: DashboardTrendSeries): DashboardTrendSectionModel {
+  return { id: 'test-trends', title: '使用趋势', description: '统计周期说明', kind: DashboardKind.TREND, cards: [card('week', '周看板趋势', week), card('month', '月看板趋势', month)] }
+}
+
 describe('UserDashboardTrends', () => {
   it('renders two large boards with separate people and token charts', () => {
     const wrapper = mount(UserDashboardTrends, {
       props: {
-        loading: false,
-        trends: {
-          week: trend('week', [1_000_000, 2_000_000, 3_000_000, 4_000_000]),
-          month: trend('month', [3_000_000, 2_000_000, 1_000_000]),
-        },
+        section: section(trend('week', [1_000_000, 2_000_000, 3_000_000, 4_000_000]), trend('month', [3_000_000, 2_000_000, 1_000_000])),
       },
     })
 
@@ -67,17 +72,10 @@ describe('UserDashboardTrends', () => {
   it('shows exact point dates on pointer hover and keyboard focus', async () => {
     const wrapper = mount(UserDashboardTrends, {
       props: {
-        loading: false,
-        trends: {
-          week: {
-            error: '',
-            points: [
-              { key: '2026-09-07', label: '37周', start: '2026-09-07', end: '2026-09-13', users: 2, usage: 100 },
-              { key: '2026-09-14', label: '38周', start: '2026-09-14', end: '2026-09-19', users: 3, usage: 200 },
-            ],
-          },
-          month: trend('month', [100, 200, 300]),
-        },
+        section: section({ error: '', points: [
+          { key: '2026-09-07', label: '37周', start: '2026-09-07', end: '2026-09-13', users: 2, usage: 100 },
+          { key: '2026-09-14', label: '38周', start: '2026-09-14', end: '2026-09-19', users: 3, usage: 200 },
+        ] }, trend('month', [100, 200, 300])),
       },
     })
 
@@ -101,17 +99,46 @@ describe('UserDashboardTrends', () => {
   it('keeps one failed board independent from the successful board', () => {
     const wrapper = mount(UserDashboardTrends, {
       props: {
-        loading: false,
-        trends: {
-          week: { points: [], error: '周统计加载失败' },
-          month: trend('month', [0, 0, 0]),
-        },
+        section: section({ points: [], error: '周统计加载失败' }, trend('month', [0, 0, 0])),
       },
     })
 
-    expect(wrapper.get('[role="alert"]').text()).toBe('周统计加载失败')
+    expect(wrapper.get('[role="alert"] > span').text()).toBe('周统计加载失败')
     expect(wrapper.text()).toContain('较首期持平')
     expect(wrapper.findAll('.dashboard-trend-metric')).toHaveLength(2)
     wrapper.unmount()
   })
+
+  it('renders a completed board while another is loading or idle, without a group overlay', async () => {
+    const data = section(trend('week', [10, 20]), trend('month', []))
+    data.cards[1].state = DashboardState.LOADING
+    const wrapper = mount(UserDashboardTrends, { props: { section: data } })
+    expect(wrapper.findAll('.dashboard-trend-card')).toHaveLength(2)
+    expect(wrapper.findAll('.dashboard-trend-metric')).toHaveLength(2)
+    expect(wrapper.findAll('[role="status"]')).toHaveLength(1)
+    expect(wrapper.findAll('.dashboard-trend-card')[0].attributes('aria-busy')).toBe('false')
+    expect(wrapper.findAll('.dashboard-trend-card')[1].attributes('aria-busy')).toBe('true')
+    expect(wrapper.text()).not.toContain('暂无趋势数据')
+    data.cards[1] = { ...data.cards[1], state: DashboardState.IDLE }
+    await wrapper.setProps({ section: { ...data } })
+    expect(wrapper.findAll('[role="status"]')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('uses supplied order, stable heading IDs and exact retry dependencies', async () => {
+    const data = section({ points: [], error: '周统计失败' }, trend('month', [3, 5]))
+    data.cards.reverse()
+    const wrapper = mount(UserDashboardTrends, { props: { section: data } })
+    expect(wrapper.findAll('h3').map(h => h.text())).toEqual(['月看板趋势', '周看板趋势'])
+    const articles = wrapper.findAll('.dashboard-trend-card')
+    expect(articles[0].attributes('aria-labelledby')).toBe('test-trends-month-title')
+    expect(wrapper.get('#test-trends-month-title').text()).toBe('月看板趋势')
+    await wrapper.get('.dashboard-trend-retry').trigger('click')
+    expect(wrapper.emitted('retry')).toEqual([['week-request']])
+    await wrapper.setProps({ section: { ...data, cards: [data.cards[0]] } })
+    expect(wrapper.findAll('h3').map(h => h.text())).toEqual(['月看板趋势'])
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
 })

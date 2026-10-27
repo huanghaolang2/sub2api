@@ -16,6 +16,43 @@ import { refreshAuthTokens } from './tokenRefresh'
 import { getAPIBaseURL } from './url'
 export { buildApiUrl, buildGatewayUrl } from './url'
 
+export enum RequestTimezonePolicy { BROWSER = 'browser', EXPLICIT = 'explicit' }
+
+export interface DashboardRequestOptions {
+  signal?: AbortSignal
+  timezonePolicy?: RequestTimezonePolicy
+}
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    timezonePolicy?: RequestTimezonePolicy
+  }
+}
+
+// Keep one authoritative timezone without disturbing repeated ID query parameters.
+function attachExplicitTimezone(config: InternalAxiosRequestConfig): void {
+  const url = config.url || ''
+  const question = url.indexOf('?')
+  const hash = url.indexOf('#')
+  const queryEnd = hash < 0 ? url.length : hash
+  const query = new URLSearchParams(question < 0 ? '' : url.slice(question + 1, queryEnd))
+  const text = (value: unknown): string => typeof value === 'string' ? value.trim() : ''
+  const fromURL = query.getAll('timezone').map(text).find(Boolean)
+  const params = config.params instanceof URLSearchParams
+    ? new URLSearchParams(config.params)
+    : { ...config.params }
+  const fromParams = text(params instanceof URLSearchParams ? params.get('timezone') : params.timezone)
+  const timezone = fromURL || fromParams || 'UTC'
+  if (query.has('timezone')) {
+    query.set('timezone', timezone)
+    config.url = `${url.slice(0, question)}?${query.toString()}${hash < 0 ? '' : url.slice(hash)}`
+    if (params instanceof URLSearchParams) params.delete('timezone')
+    else delete params.timezone
+  } else if (params instanceof URLSearchParams) params.set('timezone', timezone)
+  else params.timezone = timezone
+  config.params = params
+}
+
 // ==================== Axios Instance Configuration ====================
 
 export const apiClient: AxiosInstance = axios.create({
@@ -53,10 +90,12 @@ apiClient.interceptors.request.use(
 
     // Attach timezone for all GET requests (backend may use it for default date ranges)
     if (config.method === 'get') {
-      if (!config.params) {
-        config.params = {}
+      if (config.timezonePolicy === RequestTimezonePolicy.EXPLICIT) {
+        attachExplicitTimezone(config)
+      } else {
+        if (!config.params) config.params = {}
+        config.params.timezone = getUserTimezone()
       }
-      config.params.timezone = getUserTimezone()
     }
 
     if (config.headers) {

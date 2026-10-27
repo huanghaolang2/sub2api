@@ -1,30 +1,30 @@
 <template>
-  <section class="dashboard-trends" aria-labelledby="dashboard-trends-title">
+  <section class="dashboard-trends" :aria-labelledby="`${section.id}-title`">
     <header class="dashboard-section-heading">
       <div>
-        <h2 id="dashboard-trends-title">使用趋势</h2>
-        <p>按自然周期观察使用人数与 Token 变化，悬浮数据点可查看具体日期。</p>
+        <h2 :id="`${section.id}-title`">{{ section.title }}</h2>
+        <p>{{ section.description }}</p>
       </div>
     </header>
 
-    <div v-if="loading && !hasData" class="dashboard-trend-stack" aria-label="趋势加载中">
-      <article v-for="index in 2" :key="index" class="dashboard-trend-card is-loading">
-        <span /><strong />
-        <div><i /><i /></div>
-      </article>
-    </div>
-
-    <div v-else class="dashboard-trend-stack">
-      <article v-for="board in boards" :key="board.key" class="dashboard-trend-card">
+    <div class="dashboard-trend-stack">
+      <article v-for="board in boards" :key="board.id" class="dashboard-trend-card" :aria-labelledby="`${section.id}-${board.id}-title`" :aria-busy="board.state === DashboardState.IDLE || board.state === DashboardState.LOADING">
         <header class="dashboard-trend-card__header">
           <div>
-            <h3>{{ board.title }}</h3>
+            <h3 :id="`${section.id}-${board.id}-title`">{{ board.title }}</h3>
             <p>{{ board.caption }}</p>
           </div>
-          <span v-if="board.range">{{ board.range }}</span>
+          <span v-if="board.rangeLabel">{{ board.rangeLabel }}</span>
         </header>
 
-        <div v-if="board.error" class="dashboard-trend-state is-error" role="alert">{{ board.error }}</div>
+        <div v-if="board.state === DashboardState.IDLE || board.state === DashboardState.LOADING" class="dashboard-trend-loading" role="status" :aria-label="`${board.title}加载中`">
+          <span /><strong />
+          <div><i /><i /></div>
+        </div>
+        <div v-else-if="board.state === DashboardState.ERROR" class="dashboard-trend-state is-error" role="alert">
+          <span>{{ board.error }}</span>
+          <button v-for="target in board.retryTargets" :key="target.key" type="button" class="dashboard-trend-retry" @click="emit('retry', target.key)">{{ target.label }}</button>
+        </div>
         <div v-else-if="board.points.length === 0" class="dashboard-trend-state">暂无趋势数据</div>
         <div v-else class="dashboard-trend-metrics">
           <section v-for="metric in board.metrics" :key="metric.key" class="dashboard-trend-metric">
@@ -48,7 +48,7 @@
                 </div>
 
                 <div class="dashboard-trend-plot-column">
-                  <div class="dashboard-trend-plot-frame" @mouseleave="clearHover(board.key, metric.key)">
+                  <div class="dashboard-trend-plot-frame" @mouseleave="clearHover(board.id, metric.key)">
                     <svg
                       class="dashboard-trend-plot"
                       viewBox="0 0 100 48"
@@ -66,11 +66,11 @@
                         :y2="tick.y"
                       />
                       <line
-                        v-if="hoveredPoint(board.key, metric)"
+                        v-if="hoveredPoint(board.id, metric)"
                         class="crosshair"
-                        :x1="hoveredPoint(board.key, metric)?.x"
+                        :x1="hoveredPoint(board.id, metric)?.x"
                         y1="5"
-                        :x2="hoveredPoint(board.key, metric)?.x"
+                        :x2="hoveredPoint(board.id, metric)?.x"
                         y2="43"
                       />
                       <polyline :points="metric.line" />
@@ -81,27 +81,27 @@
                       :key="mark.point.key"
                       type="button"
                       class="dashboard-trend-hit"
-                      :class="{ 'is-active': isHovered(board.key, metric.key, mark.index) }"
+                      :class="{ 'is-active': isHovered(board.id, metric.key, mark.index) }"
                       :style="markStyle(mark)"
                       :aria-label="mark.ariaLabel"
-                      @mouseenter="activatePoint(board.key, metric.key, mark.index)"
-                      @focus="activatePoint(board.key, metric.key, mark.index)"
-                      @click="activatePoint(board.key, metric.key, mark.index)"
-                      @blur="clearHover(board.key, metric.key)"
+                      @mouseenter="activatePoint(board.id, metric.key, mark.index)"
+                      @focus="activatePoint(board.id, metric.key, mark.index)"
+                      @click="activatePoint(board.id, metric.key, mark.index)"
+                      @blur="clearHover(board.id, metric.key)"
                     >
                       <span />
                     </button>
 
                     <div
-                      v-if="hoveredPoint(board.key, metric)"
+                      v-if="hoveredPoint(board.id, metric)"
                       class="dashboard-trend-tooltip"
-                      :class="tooltipAlignment(hoveredPoint(board.key, metric)?.x ?? 50)"
-                      :style="{ left: `${hoveredPoint(board.key, metric)?.x ?? 50}%` }"
+                      :class="tooltipAlignment(hoveredPoint(board.id, metric)?.x ?? 50)"
+                      :style="{ left: `${hoveredPoint(board.id, metric)?.x ?? 50}%` }"
                       role="status"
                     >
-                      <strong>{{ hoveredPoint(board.key, metric)?.formatted }}</strong>
-                      <span>{{ metric.label }} · {{ hoveredPoint(board.key, metric)?.point.label }}</span>
-                      <time>{{ hoveredPoint(board.key, metric)?.point.start }} 至 {{ hoveredPoint(board.key, metric)?.point.end }}</time>
+                      <strong>{{ hoveredPoint(board.id, metric)?.formatted }}</strong>
+                      <span>{{ metric.label }} · {{ hoveredPoint(board.id, metric)?.point.label }}</span>
+                      <time>{{ hoveredPoint(board.id, metric)?.point.start }} 至 {{ hoveredPoint(board.id, metric)?.point.end }}</time>
                     </div>
                   </div>
 
@@ -141,7 +141,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { formatUsageBoardTokens, usageBoardTokenUnit } from '@/utils/usageBoard'
-import type { DashboardTrendPoint, DashboardTrendSeries } from './dashboardTrends'
+import type { DashboardTrendPoint } from './dashboardTrends'
+import { DashboardState, type DashboardTrendSectionModel } from './dashboardBoards'
 
 type MetricKey = 'users' | 'usage'
 
@@ -173,13 +174,10 @@ interface TrendMetric {
   ticks: AxisTick[]
 }
 
-const props = defineProps<{
-  trends: { week: DashboardTrendSeries; month: DashboardTrendSeries }
-  loading: boolean
-}>()
+const props = defineProps<{ section: DashboardTrendSectionModel }>()
+const emit = defineEmits<{ (event: 'retry', dependencyKey: string): void }>()
 
 const hover = ref<{ boardKey: string; metricKey: MetricKey; index: number } | null>(null)
-const hasData = computed(() => props.trends.week.points.length > 0 || props.trends.month.points.length > 0)
 
 function tokenScaleMaximum(value: number): number {
   if (value <= 0) return 1_000_000
@@ -263,18 +261,10 @@ function metric(points: DashboardTrendPoint[], key: MetricKey): TrendMetric {
   }
 }
 
-const boards = computed(() => ([
-  { key: 'week', title: '周看板趋势', caption: '最近 4 个自然周', data: props.trends.week },
-  { key: 'month', title: '月看板趋势', caption: '最近 3 个自然月', data: props.trends.month },
-].map((board) => ({
+const boards = computed(() => props.section.cards.map((board) => ({
   ...board,
-  points: board.data.points,
-  error: board.data.error,
-  range: board.data.points.length > 0
-    ? `${board.data.points[0].start} 到 ${board.data.points[board.data.points.length - 1].end}`
-    : '',
-  metrics: [metric(board.data.points, 'users'), metric(board.data.points, 'usage')],
-}))))
+  metrics: [metric(board.points, 'users'), metric(board.points, 'usage')],
+})))
 
 function activatePoint(boardKey: string, metricKey: MetricKey, index: number): void {
   hover.value = { boardKey, metricKey, index }
@@ -372,17 +362,19 @@ function tooltipAlignment(x: number): string {
 .dashboard-trend-labels span:focus-visible { border-radius: 3px; box-shadow: 0 0 0 2px var(--dashboard-accent); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .dashboard-trend-state { min-height: 240px; display: grid; place-items: center; color: var(--dashboard-muted); font-size: 12px; }
-.dashboard-trend-state.is-error { color: #dc2626; }
+.dashboard-trend-state.is-error { align-content: center; gap: 12px; color: #dc2626; }
+.dashboard-trend-retry { padding: 7px 14px; border: 1px solid currentColor; border-radius: 8px; background: transparent; font: inherit; cursor: pointer; }
+.dashboard-trend-retry:focus-visible { outline: 2px solid var(--dashboard-accent); outline-offset: 3px; }
 :global(.dark .dashboard-trend-state.is-error) { color: #f87171; }
-.dashboard-trend-card.is-loading { min-height: 350px; display: grid; align-content: start; gap: 12px; }
-.dashboard-trend-card.is-loading > span, .dashboard-trend-card.is-loading > strong, .dashboard-trend-card.is-loading i { display: block; background: var(--dashboard-surface-soft); border-radius: 7px; animation: dashboard-trend-pulse 1.2s ease-in-out infinite; }
-.dashboard-trend-card.is-loading > span { width: 108px; height: 16px; }
-.dashboard-trend-card.is-loading > strong { width: 190px; height: 10px; }
-.dashboard-trend-card.is-loading > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.dashboard-trend-card.is-loading i { height: 238px; }
+.dashboard-trend-loading { margin-top: 22px; min-height: 240px; display: grid; align-content: start; gap: 12px; }
+.dashboard-trend-loading > span, .dashboard-trend-loading > strong, .dashboard-trend-loading i { display: block; background: var(--dashboard-surface-soft); border-radius: 7px; animation: dashboard-trend-pulse 1.2s ease-in-out infinite; }
+.dashboard-trend-loading > span { width: 108px; height: 16px; }
+.dashboard-trend-loading > strong { width: 190px; height: 10px; }
+.dashboard-trend-loading > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.dashboard-trend-loading i { height: 238px; }
 @keyframes dashboard-trend-pulse { 50% { opacity: .42; } }
 @media (max-width: 900px) {
-  .dashboard-trend-metrics, .dashboard-trend-card.is-loading > div { grid-template-columns: 1fr; }
+  .dashboard-trend-metrics, .dashboard-trend-loading > div { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .dashboard-trend-card { padding: 18px; border-radius: 18px; }
@@ -393,7 +385,7 @@ function tooltipAlignment(x: number): string {
   .dashboard-trend-chart { grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dashboard-trend-card.is-loading > span, .dashboard-trend-card.is-loading > strong, .dashboard-trend-card.is-loading i { animation: none; }
+  .dashboard-trend-loading > span, .dashboard-trend-loading > strong, .dashboard-trend-loading i { animation: none; }
   .dashboard-trend-hit > span { transition: none; }
 }
 </style>

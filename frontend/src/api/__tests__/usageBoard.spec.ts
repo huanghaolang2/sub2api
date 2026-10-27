@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apiClient } from '../client'
+import { apiClient, RequestTimezonePolicy } from '../client'
 import { getUsageBoard, UsageBoardGranularity, UsageBoardScope, UsageBoardSortOrder } from '../usageBoard'
 
 describe('usage board request contract', () => {
@@ -15,6 +15,7 @@ describe('usage board request contract', () => {
     expect(url.searchParams.getAll('group_ids')).toEqual(['4', '5'])
     expect(url.searchParams.get('timezone')).toBe('Asia/Taipei')
     expect(config?.signal).toBe(controller.signal)
+    expect(config?.timezonePolicy).toBe(RequestTimezonePolicy.EXPLICIT)
     expect(url.searchParams.has('user_id')).toBe(false)
   })
   it('uses the management endpoint and monthly fields without empty ID parameters', async () => {

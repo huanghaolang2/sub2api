@@ -3,7 +3,7 @@
  * Handles usage logs and statistics retrieval
  */
 
-import { apiClient } from './client'
+import { apiClient, type DashboardRequestOptions } from './client'
 import type {
   UsageLog,
   UsageQueryParams,
@@ -19,6 +19,8 @@ import type {
 } from '@/types'
 
 // ==================== Dashboard Types ====================
+
+export enum UsageRankingPeriod { WEEK = 'week', MONTH = 'month', LIFETIME = 'lifetime' }
 
 export interface PlatformDashboardStats {
   platform: string
@@ -270,8 +272,8 @@ export async function getById(id: number): Promise<UsageLog> {
  * Get user dashboard statistics
  * @returns Dashboard statistics for current user
  */
-export async function getDashboardStats(): Promise<UserDashboardStats> {
-  const { data } = await apiClient.get<UserDashboardStats>('/usage/dashboard/stats')
+export async function getDashboardStats(options?: DashboardRequestOptions): Promise<UserDashboardStats> {
+  const { data } = await apiClient.get<UserDashboardStats>('/usage/dashboard/stats', options)
   return data
 }
 
@@ -291,6 +293,7 @@ export async function getDashboardTrend(params?: TrendParams): Promise<TrendResp
  * @returns Model usage statistics for current user
  */
 export async function getDashboardModels(params?: {
+  ranking_period?: UsageRankingPeriod
   start_date?: string
   end_date?: string
   api_key_id?: number
@@ -303,8 +306,8 @@ export async function getDashboardModels(params?: {
   billing_type?: number | null
   billing_mode?: string | null
   timezone?: string
-}): Promise<ModelStatsResponse> {
-  const { data } = await apiClient.get<ModelStatsResponse>('/usage/dashboard/models', { params })
+}, options?: DashboardRequestOptions): Promise<ModelStatsResponse> {
+  const { data } = await apiClient.get<ModelStatsResponse>('/usage/dashboard/models', { ...options, params })
   return data
 }
 

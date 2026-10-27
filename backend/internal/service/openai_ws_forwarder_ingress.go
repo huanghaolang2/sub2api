@@ -1031,6 +1031,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		turnPromptCacheKey := openAIWSPayloadStringFromRaw(payload, "prompt_cache_key")
 		turnStoreDisabled := s.isOpenAIWSStoreDisabledInRequestRaw(payload, account)
 		turnHasFunctionCallOutput := openAIWSRawPayloadHasToolCallOutput(payload)
+		// Only the first native WS turn is retained by the handler. A
+		// previous_response_id can additionally require this exact connection.
+		canRetryCapacity := turn == 1 && turnPreviousResponseID == ""
 		eventCount := 0
 		tokenEventCount := 0
 		terminalEventCount := 0
@@ -1081,7 +1084,14 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				parseOpenAIWSResponseUsageFromCompletedEvent(upstreamMessage, &usage)
 			}
 			if eventType == "error" || eventType == "response.failed" {
-				markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
+				cyberHit := markOpenAICyberPolicyEvent(c, upstreamMessage, http.StatusOK, &usage)
+				if canRetryCapacity && !wroteDownstream && !cyberHit && isOpenAIUpstreamCapacityShedEvent(upstreamMessage) {
+					lease.MarkBroken()
+					return nil, s.newOpenAIStreamFailoverErrorWithModel(
+						c, account, false, lease.HandshakeHeader("x-request-id"), upstreamMessage,
+						extractOpenAISSEErrorMessage(upstreamMessage), mappedModel, lease.HandshakeHeaders(),
+					)
+				}
 			}
 			if eventType == "error" {
 				s.handleOpenAIWSErrorEventTransientFailure(ctx, account, mappedModel, lease.HandshakeHeaders(), upstreamMessage)

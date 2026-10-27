@@ -641,6 +641,12 @@ func (c *openAIWSClientFrameConn) WriteFrame(ctx context.Context, msgType coderw
 		ctx = context.Background()
 	}
 	if msgType == coderws.MessageText {
+		eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+		if eventType == "error" || eventType == "response.failed" {
+			if rewritten, changed := sanitizeOpenAICapacityShedErrorCodeForClient(payload); changed {
+				payload = rewritten
+			}
+		}
 		if normalized, changed := normalizeCompletedImageGenerationStatus(payload); changed {
 			payload = normalized
 		}
@@ -1167,6 +1173,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		firstTurnStartedAt = hooks.InitialTurnStartedAt
 	}
 	failureAccountSideEffectsApplied := false
+	canRetryFirstTurn := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "previous_response_id").String()) == ""
 	relayResult, relayExit := openaiwsv2.RunEntry(openaiwsv2.EntryInput{
 		Ctx:                ctx,
 		ClientConn:         policyClientConn,
@@ -1285,6 +1292,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 				if (eventType == "error" || eventType == "response.failed") && markOpenAIWSV2PassthroughCyberPolicy(c, payload) {
 					return nil
+				}
+				if canRetryFirstTurn && completedTurns.Load() == 0 && !wroteDownstream &&
+					(eventType == "error" || eventType == "response.failed") && isOpenAIUpstreamCapacityShedEvent(payload) {
+					return s.newOpenAIStreamFailoverErrorWithModel(
+						c, account, true, handshakeHeaders.Get("x-request-id"), payload,
+						extractOpenAISSEErrorMessage(payload), capturedSessionModel, handshakeHeaders,
+					)
 				}
 				errCodeRaw, errTypeRaw, errMsgRaw := parseOpenAIWSErrorEventFields(payload)
 				isPreOutputRateLimit := eventType == "error" && !wroteDownstream && isOpenAIWSRateLimitError(errCodeRaw, errTypeRaw, errMsgRaw)

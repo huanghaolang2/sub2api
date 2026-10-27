@@ -501,7 +501,20 @@ func (h *UsageHandler) DashboardModels(c *gin.Context) {
 		return
 	}
 
-	stats, err := h.usageService.GetModelStatsWithFiltersBySource(c.Request.Context(), parsed.StartTime, parsed.EndTime, parsed.Filters, usagestats.ModelSourceRequested)
+	period := usagestats.ModelRankingPeriod(strings.TrimSpace(c.Query("ranking_period")))
+	if period != "" {
+		if _, valid := period.Options(); !valid {
+			response.BadRequest(c, "Invalid ranking_period")
+			return
+		}
+	}
+	var stats []usagestats.ModelStat
+	var err error
+	if period == "" {
+		stats, err = h.usageService.GetModelStatsWithFiltersBySource(c.Request.Context(), parsed.StartTime, parsed.EndTime, parsed.Filters, usagestats.ModelSourceRequested)
+	} else {
+		stats, err = h.usageService.GetDashboardModelRanking(c.Request.Context(), parsed.StartTime, parsed.EndTime, parsed.Filters, period)
+	}
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

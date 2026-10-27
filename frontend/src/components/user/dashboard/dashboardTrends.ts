@@ -6,7 +6,7 @@ export type DashboardTrendKind = 'week' | 'month'
 export interface DashboardPeriodStats {
   users: number
   usage: number
-  ranking: Array<{ name: string; usage: number }>
+  ranking: Array<{ id: string; name: string; usage: number }>
   error: string
   rangeLabel: string
 }
@@ -101,7 +101,7 @@ export function summarizeUsageBoardPeriod(
   return {
     users: values.filter(([, item]) => item.usage > 0).length,
     usage: values.reduce((sum, [, item]) => sum + item.usage, 0),
-    ranking: values.sort(([leftID, left], [rightID, right]) => right.usage - left.usage || leftID - rightID).map(([, item]) => item),
+    ranking: values.sort(([leftID, left], [rightID, right]) => right.usage - left.usage || leftID - rightID).map(([id, item]) => ({ id: String(id), ...item })),
     error: '',
     rangeLabel: period ? `${period.start} 到 ${clippedEnd(period.end, result.end_date)}` : `${result.start_date} 到 ${result.end_date}`
   }

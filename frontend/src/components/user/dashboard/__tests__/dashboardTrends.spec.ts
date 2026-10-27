@@ -61,8 +61,8 @@ describe('dashboard trend helpers', () => {
     expect(summary.users).toBe(2)
     expect(summary.usage).toBe(400)
     expect(summary.ranking).toEqual([
-      { name: '文案 A', usage: 300 },
-      { name: '文案 B', usage: 100 }
+      { id: '1', name: '文案 A', usage: 300 },
+      { id: '2', name: '文案 B', usage: 100 }
     ])
   })
 
@@ -86,11 +86,11 @@ describe('dashboard trend helpers', () => {
     const summary = summarizeUsageBoardPeriod(data, undefined, allKeys)
     expect(summary.users).toBe(11)
     expect(summary.ranking).toHaveLength(13)
-    expect(summary.ranking[0]).toEqual({ name: '文案 12', usage: 12 })
-    expect(summary.ranking[10]).toEqual({ name: '文案 2', usage: 2 })
+    expect(summary.ranking[0]).toEqual({ id: '12', name: '文案 12', usage: 12 })
+    expect(summary.ranking[10]).toEqual({ id: '2', name: '文案 2', usage: 2 })
     expect(summary.ranking.slice(11)).toEqual([
-      { name: '文案 1', usage: 0 },
-      { name: '文案 13', usage: 0 }
+      { id: '1', name: '文案 1', usage: 0 },
+      { id: '13', name: '文案 13', usage: 0 }
     ])
   })
 
@@ -107,8 +107,8 @@ describe('dashboard trend helpers', () => {
       { api_key_id: 2, api_key_name: '共享 (#2)', total_tokens: 0 }
     ]
     expect(summarizeUsageBoardPeriod(data, 0, allKeys).ranking).toEqual([
-      { name: '共享 (#1)', usage: 10 },
-      { name: '共享 (#2)', usage: 0 }
+      { id: '1', name: '共享 (#1)', usage: 10 },
+      { id: '2', name: '共享 (#2)', usage: 0 }
     ])
   })
 

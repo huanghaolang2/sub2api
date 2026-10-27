@@ -2715,7 +2715,13 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	var oauth429FailoverState service.OpenAIOAuth429FailoverState
 	wsAttemptMessage := append([]byte(nil), firstMessage...)
 	waitForWSSameAccountRetry := func(account *service.Account, failoverErr *service.UpstreamFailoverError) bool {
-		if account == nil || failoverErr == nil || failoverErr.StatusCode != http.StatusTooManyRequests || failoverErr.SameAccountRetryDeadline.IsZero() {
+		if account == nil || failoverErr == nil {
+			return false
+		}
+		// Capacity failures use the same bounded retry budget as HTTP. Keep
+		// the existing deadline-based OAuth 429 path unchanged.
+		if !failoverErr.IsOpenAICapacityShed() &&
+			(failoverErr.StatusCode != http.StatusTooManyRequests || failoverErr.SameAccountRetryDeadline.IsZero()) {
 			return false
 		}
 		retryLimit := effectiveSameAccountRetryLimit(failoverErr, account)
@@ -4023,6 +4029,12 @@ func closeOpenAIWSFailoverExhausted(c *gin.Context, conn *coderws.Conn, failover
 				message = "upstream websocket authentication failed"
 				closeStatus = coderws.StatusPolicyViolation
 			}
+		}
+		if failoverErr.IsOpenAICapacityShed() {
+			intendedStatus = http.StatusServiceUnavailable
+			errorType, errorCode = "server_error", "server_error"
+			message = failoverErr.ClientMessage
+			closeStatus = coderws.StatusTryAgainLater
 		}
 	}
 

@@ -1,4 +1,4 @@
-import { apiClient } from './client'
+import { apiClient, RequestTimezonePolicy } from './client'
 
 export enum UsageBoardGranularity { DAY = 'day', WEEK = 'week', MONTH = 'month' }
 export enum UsageBoardScope { SELF = 'self', ADMIN = 'admin' }
@@ -62,6 +62,6 @@ export async function getUsageBoard(scope: UsageBoardScope, query: UsageBoardQue
   })
   const path = scope === UsageBoardScope.ADMIN ? '/admin/usage/board' : '/usage/board'
   // Use a query string so the shared client's timezone injection cannot rewrite repeated ID parameters.
-  const { data } = await apiClient.get<UsageBoardResponse>(`${path}?${params.toString()}`, { signal })
+  const { data } = await apiClient.get<UsageBoardResponse>(`${path}?${params.toString()}`, { signal, timezonePolicy: RequestTimezonePolicy.EXPLICIT })
   return data
 }
